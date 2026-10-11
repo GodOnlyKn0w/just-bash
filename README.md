@@ -27,4 +27,4 @@ examples/         example consumers (bash-agent, cjs-consumer, website)
 
 ## Working in the repo
 
-See the [contributing guide](./CONTRIBUTING.md) for setting up the repository, building and testing the packages, and the requirements a change must satisfy.
+See [AGENTS.md](./AGENTS.md) for setting up the repository, building and testing the packages.

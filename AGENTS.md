@@ -2,16 +2,27 @@
 
 This file provides guidance to coding agents working with the code in this repository.
 
-[CONTRIBUTING.md](./CONTRIBUTING.md) is the contribution guide: setup and commands, the constraints the implementation must respect, the debugging and testing workflow, and the security requirements that every change must preserve. It applies to agents as much as to anyone else, so read it before making a change.
-
 Source paths below are relative to `packages/just-bash`, the published package. The repository root has no `src/` or `dist/`.
+
+## Setup and commands
+
+just-bash is a pnpm monorepo. It requires Node.js `>=20.19` and pnpm. These commands run from the repository root:
+
+```sh
+pnpm install
+pnpm build              # required before anything reads dist/
+pnpm test:run           # unit, comparison, and spec tests; spec tests have known failures
+pnpm test:unit          # fast unit tests
+pnpm test:comparison    # recorded bash fixtures
+pnpm test:wasm          # python3, sqlite3, js-exec
+pnpm typecheck
+pnpm --filter just-bash test:run src/commands/grep/grep.basic.test.ts  # a single test file
+```
 
 ## Workflow shortcuts
 
-These are the parts of that guide that matter most while working quickly:
-
-- Inspect shell behavior with `pnpm dev:exec` instead of writing a throwaway script (see Debugging).
-- While iterating, run `pnpm test:unit` or a single test file rather than the full suite (see Setting up).
+- Inspect shell behavior with `pnpm dev:exec` instead of writing a throwaway script: `echo 'echo hello' | pnpm dev:exec`; `--real-bash` also runs the system bash and compares, `--print-ast` prints the parsed AST.
+- While iterating, run `pnpm test:unit` or a single test file rather than the full suite.
 - Tests run from source. Run `pnpm build` before exercising the compiled output under `dist/`.
 
 ## Code map
