@@ -15,7 +15,6 @@ import { Bash } from "./Bash.js";
 import {
   getCommandNames,
   getJavaScriptCommandNames,
-  getNetworkCommandNames,
   getPythonCommandNames,
 } from "./commands/registry.js";
 
@@ -294,7 +293,6 @@ describe("README validation", () => {
       const readmeCommands = extractReadmeCommands(readme);
       const registryCommands = new Set([
         ...getCommandNames(),
-        ...getNetworkCommandNames(),
         ...getPythonCommandNames(),
         ...getJavaScriptCommandNames(),
       ]);
@@ -360,7 +358,6 @@ describe("AGENTS.npm.md validation", () => {
       const agentsCommands = extractAgentsCommands(agents);
       const registryCommands = new Set([
         ...getCommandNames(),
-        ...getNetworkCommandNames(),
         ...getPythonCommandNames(),
         ...getJavaScriptCommandNames(),
       ]);

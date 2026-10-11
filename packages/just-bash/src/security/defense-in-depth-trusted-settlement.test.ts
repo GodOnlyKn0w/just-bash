@@ -53,7 +53,7 @@ it("handles a host tool rejection after the bridge is stopped", () => {
       const shared = createSharedBuffer();
       const protocol = new ProtocolBuffer(shared);
       const bridge = new BridgeHandler(
-        shared, new InMemoryFs(), "/", "test", undefined, 0, undefined,
+        shared, new InMemoryFs(), "/", "test", 0, undefined,
         () => { started.resolve(); return pending.promise; },
       );
       protocol.setOpCode(OpCode.INVOKE_TOOL);

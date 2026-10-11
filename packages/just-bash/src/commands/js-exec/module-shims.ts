@@ -93,7 +93,7 @@ var _os = {
 globalThis[Symbol.for('jb:os')] = _os;
 `;
 
-/** URL module — wraps globalThis.URL/URLSearchParams from fetch polyfill */
+/** URL module — wraps globalThis.URL/URLSearchParams from the web polyfill */
 export const URL_MODULE_SOURCE = `
 var _urlMod = {
   URL: globalThis.URL,
@@ -773,9 +773,9 @@ globalThis[Symbol.for('jb:querystring')] = _qs;
 export const UNSUPPORTED_MODULES: Record<string, string> = Object.assign(
   Object.create(null) as Record<string, string>,
   {
-    http: "Use fetch() for HTTP requests.",
-    https: "Use fetch() for HTTP requests.",
-    http2: "Use fetch() for HTTP requests.",
+    http: "HTTP APIs are not supported.",
+    https: "HTTP APIs are not supported.",
+    http2: "HTTP APIs are not supported.",
     net: "Network socket APIs are not supported.",
     tls: "Network socket APIs are not supported.",
     dgram: "Network socket APIs are not supported.",

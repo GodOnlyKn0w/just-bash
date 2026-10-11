@@ -24,7 +24,6 @@ import type {
   ExecResult,
   RuntimeCommandContext,
 } from "../../types.js";
-import { FETCH_POLYFILL_SOURCE } from "./fetch-polyfill.js";
 import {
   ASSERT_MODULE_SOURCE,
   BUFFER_MODULE_SOURCE,
@@ -38,6 +37,7 @@ import {
   UTIL_MODULE_SOURCE,
 } from "./module-shims.js";
 import { PATH_MODULE_SOURCE } from "./path-polyfill.js";
+import { WEB_POLYFILL_SOURCE } from "./web-polyfill.js";
 
 interface RunJsOptions {
   source: string;
@@ -97,7 +97,7 @@ const RUN_BUFFER_MODULE_SOURCE = BUFFER_MODULE_SOURCE.replace(
   "};\nBuffer.prototype.toJSON = function() {",
   "}});\nBuffer.prototype.toJSON = function() {",
 );
-const RUN_FETCH_POLYFILL_SOURCE = FETCH_POLYFILL_SOURCE.replace(
+const RUN_WEB_POLYFILL_SOURCE = WEB_POLYFILL_SOURCE.replace(
   "URLSearchParams.prototype.toString = function() {",
   "Object.defineProperty(URLSearchParams.prototype, 'toString', { configurable: true, writable: true, value: function() {",
 )
@@ -535,9 +535,7 @@ const guestSetupSource = (
   ${STRING_DECODER_MODULE_SOURCE}
   ${QUERYSTRING_MODULE_SOURCE}
 
-  var nativeFetch = function(url, opts) { return unwrap(host.fetch(String(url), opts)); };
-  globalThis[Symbol.for('jb:fetch')] = nativeFetch;
-  ${RUN_FETCH_POLYFILL_SOURCE}
+  ${RUN_WEB_POLYFILL_SOURCE}
   ${URL_MODULE_SOURCE}
 
   var childProcess = {
@@ -938,39 +936,6 @@ async function executeWithRunInner(
             attempt(async () => await ctx.fs.cp(resolve(from), resolve(to))),
           stdout: (value: string) => appendOutput("stdout", value),
           stderr: (value: string) => appendOutput("stderr", value),
-          async fetch(
-            url: string,
-            init?: {
-              method?: string;
-              headers?: Record<string, string>;
-              body?: string;
-            },
-          ) {
-            return await attempt(async () => {
-              if (!ctx.fetch)
-                throw new Error(
-                  "Network access not configured. Enable network in Bash options.",
-                );
-              const remaining =
-                deadline === Number.POSITIVE_INFINITY
-                  ? undefined
-                  : Math.max(0, deadline - Date.now());
-              const response = await ctx.fetch(url, {
-                method: init?.method,
-                headers: init?.headers,
-                body: init?.body,
-                ...(remaining === undefined ? {} : { timeoutMs: remaining }),
-                signal: getHostFunctionContext().abortSignal,
-              });
-              return {
-                body: Buffer.from(response.body).toString("latin1"),
-                headers: response.headers,
-                status: response.status,
-                statusText: response.statusText,
-                url: response.url,
-              };
-            });
-          },
           async exec(command: string, stdin?: string) {
             return await attempt(async () => {
               if (!ctx.exec)

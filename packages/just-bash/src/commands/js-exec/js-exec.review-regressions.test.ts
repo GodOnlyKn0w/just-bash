@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import { Bash } from "../../Bash.js";
 import { defineCommand } from "../../custom-commands.js";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
-import type { SecureFetch } from "../../network/index.js";
 
 describe("js-exec run adapter regressions", () => {
   it("counts queue admission time against the JavaScript timeout", async () => {
@@ -363,39 +362,6 @@ describe("js-exec run adapter regressions", () => {
     expect(result.stdout).toBe('127 ""\n');
     expect(result.stderr).toBe("");
     expect(result.exitCode).toBe(0);
-  });
-
-  it("forwards only the documented guest fetch fields", async () => {
-    const secureFetch: SecureFetch = vi.fn().mockResolvedValue({
-      body: new Uint8Array(),
-      headers: {},
-      status: 200,
-      statusText: "OK",
-      url: "https://example.com/",
-    });
-    const bash = new Bash({ fetch: secureFetch, javascript: true });
-    const result = await bash.exec(
-      `js-exec -c "await fetch('https://example.com/', {method:'POST', headers:{x:'y'}, body:'ok', followRedirects:false, maxRedirects:0, timeoutMs:1})"`,
-    );
-
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toBe("");
-    expect(result.exitCode).toBe(0);
-    expect(secureFetch).toHaveBeenCalledTimes(1);
-    const options = vi.mocked(secureFetch).mock.calls[0][1];
-    expect(Object.keys(options ?? {}).sort()).toEqual([
-      "body",
-      "headers",
-      "method",
-      "signal",
-      "timeoutMs",
-    ]);
-    expect(options).toMatchObject({
-      body: "ok",
-      headers: { x: "y" },
-      method: "POST",
-    });
-    expect(options?.timeoutMs).toBeGreaterThan(1);
   });
 
   it("allows compatibility workloads beyond the former 1024-call ceiling", async () => {

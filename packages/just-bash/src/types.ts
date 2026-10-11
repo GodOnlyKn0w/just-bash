@@ -2,7 +2,6 @@ import type { ByteString } from "./encoding.js";
 import type { CommandExecutionBudget } from "./execution-scope.js";
 import type { IFileSystem } from "./fs/interface.js";
 import type { ExecutionLimits } from "./limits.js";
-import type { SecureFetch } from "./network/index.js";
 
 /**
  * Lightweight interface for feature coverage tracking during fuzzing.
@@ -132,7 +131,6 @@ export interface CommandExecOptions {
  * - `getRegisteredCommands` - For the `help` command to list available commands
  *
  * **Conditionally available based on configuration:**
- * - `fetch` - Only when `network` option is configured in BashEnv
  * - `sleep` - Only when a custom sleep function is provided (e.g., for testing)
  */
 /**
@@ -218,11 +216,6 @@ export interface RuntimeCommandContext {
     command: string,
     options: Omit<CommandExecOptions, "stdin" | "stdinKind">,
   ) => Promise<ExecResult>;
-  /**
-   * Secure fetch function for network requests (e.g., for `curl`).
-   * Only available when `network` option is configured in BashEnv.
-   */
-  fetch?: SecureFetch;
   /**
    * Returns names of all registered commands.
    * Available when running commands via BashEnv interpreter.

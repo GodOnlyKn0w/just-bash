@@ -3,7 +3,3 @@
 // module must remain inert and should never be called at runtime.
 export const AsyncLocalStorage = undefined;
 export const Module = undefined;
-
-export function lookup() {
-  throw new Error("node:dns is not available in browser environments");
-}

@@ -53,8 +53,6 @@ describe("Bash commands filtering", () => {
     expect(names).toContain("ls");
     expect(names).toContain("grep");
     expect(names).toContain("find");
-    // curl is a network command, not in the default list
-    expect(names).not.toContain("curl");
   });
 
   it("empty commands array means no commands", async () => {

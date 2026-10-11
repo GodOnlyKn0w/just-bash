@@ -18,13 +18,11 @@ export type {
   AllCommandName,
   CommandName,
   JavaScriptCommandName,
-  NetworkCommandName,
   PythonCommandName,
 } from "./commands/registry.js";
 export {
   getCommandNames,
   getJavaScriptCommandNames,
-  getNetworkCommandNames,
   getPythonCommandNames,
 } from "./commands/registry.js";
 // Custom commands API
@@ -75,18 +73,6 @@ export {
   type MountableFsOptions,
   type MountConfig,
 } from "./fs/mountable-fs/index.js";
-export type {
-  AllowedUrl,
-  AllowedUrlEntry,
-  NetworkConfig,
-  RequestTransform,
-  SecureFetch,
-} from "./network/index.js";
-export {
-  NetworkAccessDeniedError,
-  RedirectNotAllowedError,
-  TooManyRedirectsError,
-} from "./network/index.js";
 // Parser
 export { parse } from "./parser/parser.js";
 // Security module - defense-in-depth

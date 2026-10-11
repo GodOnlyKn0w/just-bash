@@ -7,15 +7,8 @@
 
 export type { BashLogger, BashOptions, ExecOptions } from "./Bash.js";
 export { Bash } from "./Bash.js";
-export type {
-  AllCommandName,
-  CommandName,
-  NetworkCommandName,
-} from "./commands/registry.js";
-export {
-  getCommandNames,
-  getNetworkCommandNames,
-} from "./commands/registry.js";
+export type { AllCommandName, CommandName } from "./commands/registry.js";
+export { getCommandNames } from "./commands/registry.js";
 export type {
   CommandContextOptions,
   CustomCommand,
@@ -46,12 +39,6 @@ export {
   type MountableFsOptions,
   type MountConfig,
 } from "./fs/mountable-fs/index.js";
-export type { NetworkConfig } from "./network/index.js";
-export {
-  NetworkAccessDeniedError,
-  RedirectNotAllowedError,
-  TooManyRedirectsError,
-} from "./network/index.js";
 export type {
   BashExecResult,
   Command,

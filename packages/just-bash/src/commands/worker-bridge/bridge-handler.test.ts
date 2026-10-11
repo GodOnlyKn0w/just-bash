@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
-import type { SecureFetch } from "../../network/fetch.js";
 import type { CommandExecOptions, ExecResult } from "../../types.js";
 import { BridgeHandler } from "./bridge-handler.js";
 import {
@@ -37,32 +36,6 @@ async function sendOp(
 }
 
 describe("BridgeHandler raceDeadline", () => {
-  it("HTTP_REQUEST resolves with error when secureFetch never settles", async () => {
-    const shared = createSharedBuffer();
-    const protocol = new ProtocolBuffer(shared);
-    const neverSettle: SecureFetch = () => new Promise<never>(() => {});
-    const handler = new BridgeHandler(
-      shared,
-      new InMemoryFs(),
-      "/",
-      "test-cmd",
-      neverSettle,
-    );
-    const runPromise = handler.run(200);
-
-    const status = await sendOp(protocol, OpCode.HTTP_REQUEST, {
-      path: "https://example.com",
-      data: JSON.stringify({ method: "GET" }),
-    });
-
-    expect(status).toBe(Status.ERROR);
-    const errMsg = protocol.getResultAsString();
-    expect(errMsg).toContain("timed out");
-
-    const result = await runPromise;
-    expect(result.exitCode).toBe(124);
-  });
-
   it("EXEC_COMMAND resolves with error when exec never settles", async () => {
     const shared = createSharedBuffer();
     const protocol = new ProtocolBuffer(shared);
@@ -75,7 +48,6 @@ describe("BridgeHandler raceDeadline", () => {
       new InMemoryFs(),
       "/",
       "test-cmd",
-      undefined,
       0,
       neverSettle,
     );
@@ -103,7 +75,6 @@ describe("BridgeHandler raceDeadline", () => {
       new InMemoryFs(),
       "/",
       "test-cmd",
-      undefined,
       0,
       undefined,
       neverSettle,
@@ -131,7 +102,6 @@ describe("BridgeHandler raceDeadline", () => {
       new InMemoryFs(),
       "/",
       "test-cmd",
-      undefined,
       0,
       undefined,
       async () => {

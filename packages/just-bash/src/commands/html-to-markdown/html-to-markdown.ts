@@ -28,8 +28,6 @@ const htmlToMarkdownHelp = {
     "This is a non-standard BashEnv extension command, not available in regular bash.",
     "",
     "Read HTML from FILE or standard input and output Markdown to standard output.",
-    "Commonly used with curl to convert web pages:",
-    "  curl -s https://example.com | html-to-markdown",
     "",
     "Supported HTML elements:",
     "  - Headings (h1-h6) → # Markdown headings",
@@ -55,7 +53,7 @@ const htmlToMarkdownHelp = {
   examples: [
     "echo '<h1>Hello</h1><p>World</p>' | html-to-markdown",
     "html-to-markdown page.html",
-    "curl -s https://example.com | html-to-markdown > page.md",
+    "cat page.html | html-to-markdown > page.md",
   ],
 };
 

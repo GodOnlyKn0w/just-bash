@@ -11,7 +11,6 @@ import type {
 import type { ExecutionScope } from "../execution-scope.js";
 import type { IFileSystem } from "../fs/interface.js";
 import type { ExecutionLimits } from "../limits.js";
-import type { SecureFetch } from "../network/index.js";
 import type {
   CommandExecOptions,
   CommandRegistry,
@@ -492,8 +491,6 @@ export interface InterpreterContext {
     stdin: string,
     stdinOwned?: boolean,
   ) => Promise<ExecResult>;
-  /** Optional secure fetch function for network-enabled commands */
-  fetch?: SecureFetch;
   /** Optional sleep function for testing with mock clocks */
   sleep?: (ms: number) => Promise<void>;
   /** Optional trace callback for performance profiling */

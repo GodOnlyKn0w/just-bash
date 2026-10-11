@@ -43,7 +43,6 @@ describe("BridgeHandler output limits", () => {
       new InMemoryFs(),
       "/",
       "python3",
-      undefined,
       128,
     );
     const runPromise = handler.run(1000);
@@ -66,7 +65,6 @@ describe("BridgeHandler output limits", () => {
       new InMemoryFs(),
       "/",
       "python3",
-      undefined,
       128,
     );
     const runPromise = handler.run(1000);

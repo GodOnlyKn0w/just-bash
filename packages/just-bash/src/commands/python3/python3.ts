@@ -484,7 +484,6 @@ async function executePython(
     ctx.fs,
     ctx.cwd,
     "python3",
-    ctx.fetch,
     ctx.limits.maxOutputSize,
   );
 

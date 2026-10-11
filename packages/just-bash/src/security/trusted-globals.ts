@@ -13,7 +13,6 @@ export const _SharedArrayBuffer: typeof globalThis.SharedArrayBuffer =
   globalThis.SharedArrayBuffer;
 export const _Atomics: typeof globalThis.Atomics = globalThis.Atomics;
 export const _performanceNow: () => number = performance.now.bind(performance);
-export const _Headers: typeof globalThis.Headers = globalThis.Headers;
 /** Internal capability revocation; never expose this constructor to commands. */
 export const _Proxy: ProxyConstructor = globalThis.Proxy;
 /**

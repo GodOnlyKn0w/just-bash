@@ -244,15 +244,6 @@ export function createDefenseAwareCommandContext(
     );
   }
 
-  if (ctx.fetch) {
-    wrappedCtx.fetch = wrapFunction(
-      ctx.fetch,
-      ctx.requireDefenseContext,
-      component,
-      "fetch",
-    );
-  }
-
   if (ctx.sleep) {
     wrappedCtx.sleep = wrapFunction(
       ctx.sleep,

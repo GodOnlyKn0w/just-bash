@@ -291,25 +291,6 @@ print(os.getcwd())
       expect(result.stdout).toBe("OK\n");
       expect(result.exitCode).toBe(0);
     });
-
-    it("should allow jb_http module", async () => {
-      const env = new Bash({ python: true });
-      await env.exec(`cat > /tmp/test_jb_http.py << 'EOF'
-import jb_http
-try:
-    resp = jb_http.get('http://example.com')
-    print('HTTP_OK:', resp.status_code)
-except Exception as e:
-    msg = str(e)
-    if 'Network' in msg or 'not configured' in msg:
-        print('OK: bridge works, network not configured')
-    else:
-        print('OK: bridge works, got error:', msg[:80])
-EOF`);
-      const result = await env.exec("python3 /tmp/test_jb_http.py");
-      expect(result.stdout).toContain("OK");
-      expect(result.exitCode).toBe(0);
-    });
   });
 
   describe("module name validation", () => {

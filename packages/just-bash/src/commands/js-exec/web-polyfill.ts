@@ -1,9 +1,9 @@
 /**
- * Web Fetch API polyfill source for QuickJS.
+ * Web API polyfill source for QuickJS.
  * Exported as a string constant to be evaluated inside the sandbox.
- * Provides URLSearchParams, URL, Headers, Response, Request, and fetch().
+ * Provides URLSearchParams, URL, Headers, Response, and Request.
  */
-export const FETCH_POLYFILL_SOURCE = `
+export const WEB_POLYFILL_SOURCE = `
 (function() {
   // --- URLSearchParams ---
   function URLSearchParams(init) {
@@ -450,55 +450,5 @@ export const FETCH_POLYFILL_SOURCE = `
   globalThis.Headers = Headers;
   globalThis.Response = Response;
   globalThis.Request = Request;
-
-  // --- Wrap native fetch ---
-  var _nativeFetch = globalThis[Symbol.for('jb:fetch')];
-  globalThis.fetch = function fetch(input, init) {
-    try {
-      var url, method, headers, body;
-
-      if (input instanceof Request) {
-        url = input.url;
-        method = input.method;
-        headers = {};
-        input.headers.forEach(function(v, k) { headers[k] = v; });
-        body = input.body;
-      } else {
-        url = String(input);
-        method = undefined;
-        headers = undefined;
-        body = undefined;
-      }
-
-      if (init) {
-        if (init.method !== undefined) method = String(init.method).toUpperCase();
-        if (init.headers !== undefined) {
-          var h = init.headers instanceof Headers ? init.headers : new Headers(init.headers);
-          headers = {};
-          h.forEach(function(v, k) { headers[k] = v; });
-        }
-        if (init.body !== undefined) body = init.body !== null ? String(init.body) : undefined;
-      }
-
-      var opts = Object.create(null);
-      if (method) opts.method = method;
-      if (headers) opts.headers = headers;
-      if (body) opts.body = body;
-
-      var raw = _nativeFetch(url, opts);
-
-      var respHeaders = new Headers(raw.headers || {});
-      var response = new Response(raw.body, {
-        status: raw.status,
-        statusText: raw.statusText || '',
-        headers: respHeaders
-      });
-      response.url = raw.url || url;
-
-      return Promise.resolve(response);
-    } catch (e) {
-      return Promise.reject(new TypeError(e.message || 'fetch failed'));
-    }
-  };
 })();
 `;

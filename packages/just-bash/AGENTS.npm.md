@@ -64,7 +64,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 2. **No real filesystem**: Commands only see the virtual filesystem.
 
-3. **No network by default**: `curl` doesn't exist unless you configure `network` options with URL allowlists.
+3. **No network**: there is no network access.
 
 4. **No binaries/WASM**: Only built-in commands work. You cannot run node, python, or other binaries.
 
@@ -78,7 +78,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 **File operations**: `basename`, `chmod`, `cp`, `dirname`, `du`, `file`, `find`, `ln`, `ls`, `mkdir`, `mktemp`, `mv`, `od`, `pwd`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
 
-**Utilities**: `alias`, `base64`, `bash`, `clear`, `curl`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `yes`, `zcat`
+**Utilities**: `alias`, `base64`, `bash`, `clear`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `yes`, `zcat`
 
 All commands support `--help` for usage details.
 
@@ -275,7 +275,7 @@ Common exit codes:
 ## Security Model
 
 - Virtual filesystem is isolated from the real system
-- Network access requires explicit URL allowlists
+- No network access
 - Execution limits prevent infinite loops and resource exhaustion
 - No shell injection possible (commands are parsed, not eval'd)
 
@@ -302,8 +302,6 @@ const bash = new Bash({
 ```
 
 **Output size limits**: AWK, sed, jq, and printf enforce `maxStringLength` on their output buffers. Commands that exceed the limit exit with code 126.
-
-**Network response size**: `maxResponseSize` in `NetworkConfig` caps HTTP response bodies (default: 10MB).
 
 ## Discovering Types
 
@@ -338,7 +336,7 @@ resolve at runtime.
 
 It matters when you run just-bash through **another** bundler (Next.js,
 webpack, esbuild, rollup) for a serverless or edge target. That bundler will try
-to inline these, and some of them cannot be inlined. Mark all six as external:
+to inline these, and some of them cannot be inlined. Mark all five as external:
 
 | Package | What it is |
 | --- | --- |
@@ -347,12 +345,6 @@ to inline these, and some of them cannot be inlined. Mark all six as external:
 | `sql.js` | ships a `.wasm` asset |
 | `run` | embeds the QuickJS WASM runtime |
 | `seek-bzip` | CommonJS-only bzip2 decoder |
-| `guarded-fetch` | imports `node:dns/promises`, `node:net`, `node:dns` |
-
-`guarded-fetch` is the one that bites bundlers targeting a non-Node context:
-inlining it pulls in Node builtins, and a bundler whose chunking context has no
-concept of them fails the build (Turbopack reports `the chunking context
-(unknown) does not support external modules (request: node:dns/promises)`).
 
 Next.js 15+:
 
@@ -366,7 +358,6 @@ const nextConfig = {
     "seek-bzip",
     "sql.js",
     "run",
-    "guarded-fetch",
   ],
 };
 ```
@@ -375,7 +366,7 @@ Older Next.js uses `experimental.serverComponentsExternalPackages`. webpack:
 add them to `externals` (or use `webpack-node-externals`). esbuild/rollup:
 `--external:<name>` / `external: [...]`.
 
-**Node version**: just-bash requires Node `>=20.19` (`guarded-fetch`'s floor).
+**Node version**: just-bash requires Node `>=20.19`.
 
 **Optional dependencies**: `@mongodb-js/zstd` and `node-liblzma` are declared
 in `optionalDependencies`, so an install that cannot build them still succeeds.

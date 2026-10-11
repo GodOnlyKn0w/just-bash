@@ -16,7 +16,7 @@ interface LazyCommandDef<T extends string = string> {
   load: CommandLoader;
 }
 
-/** All available built-in command names (excludes network commands) */
+/** All available built-in command names (excludes python and javascript commands) */
 export type CommandName =
   | "echo"
   | "cat"
@@ -104,19 +104,15 @@ export type CommandName =
   | "time"
   | "whoami";
 
-/** Network command names (only available when network is configured) */
-export type NetworkCommandName = "curl";
-
 /** Python command names (only available when python is explicitly enabled) */
 export type PythonCommandName = "python3" | "python";
 
 /** JavaScript command names (only available when javascript is explicitly enabled) */
 export type JavaScriptCommandName = "js-exec" | "node";
 
-/** All command names including network, python, and javascript commands */
+/** All command names including python and javascript commands */
 export type AllCommandName =
   | CommandName
-  | NetworkCommandName
   | PythonCommandName
   | JavaScriptCommandName;
 
@@ -537,14 +533,6 @@ if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
   });
 }
 
-// Network commands - only registered when network is configured
-const networkCommandLoaders: LazyCommandDef<NetworkCommandName>[] = [
-  {
-    name: "curl",
-    load: async () => (await import("./curl/curl.js")).curlCommand,
-  },
-];
-
 // Cache for loaded commands
 const cache = new Map<string, RuntimeCommand>();
 
@@ -602,21 +590,14 @@ function createLazyCommand(def: LazyCommandDef): RuntimeCommand {
 }
 
 /**
- * Gets all available command names (excludes network commands)
+ * Gets all available command names
  */
 export function getCommandNames(): string[] {
   return commandLoaders.map((def) => def.name);
 }
 
 /**
- * Gets all network command names
- */
-export function getNetworkCommandNames(): string[] {
-  return networkCommandLoaders.map((def) => def.name);
-}
-
-/**
- * Creates all lazy commands for registration (excludes network commands)
+ * Creates all lazy commands for registration
  * @param filter Optional array of command names to include. If not provided, all commands are created.
  */
 export function createLazyCommands(filter?: CommandName[]): RuntimeCommand[] {
@@ -624,14 +605,6 @@ export function createLazyCommands(filter?: CommandName[]): RuntimeCommand[] {
     ? commandLoaders.filter((def) => filter.includes(def.name))
     : commandLoaders;
   return loaders.map(createLazyCommand);
-}
-
-/**
- * Creates network commands for registration (curl, etc.)
- * These are only registered when network is explicitly configured.
- */
-export function createNetworkCommands(): RuntimeCommand[] {
-  return networkCommandLoaders.map(createLazyCommand);
 }
 
 /**

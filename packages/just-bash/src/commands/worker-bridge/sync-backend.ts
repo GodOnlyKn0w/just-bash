@@ -225,52 +225,6 @@ export class SyncBackend {
   }
 
   /**
-   * Make an HTTP request through the main thread's secureFetch.
-   * Returns the response as a parsed object.
-   */
-  httpRequest(
-    url: string,
-    options?: {
-      method?: string;
-      headers?: Record<string, string>;
-      body?: string;
-    },
-  ): {
-    status: number;
-    statusText: string;
-    headers: Record<string, string>;
-    body: string;
-    bodyBase64: string;
-    url: string;
-  } {
-    const requestData = options
-      ? new TextEncoder().encode(JSON.stringify(options))
-      : undefined;
-    const result = this.execSync(OpCode.HTTP_REQUEST, url, requestData);
-    if (!result.success) {
-      throw new Error(result.error || "HTTP request failed");
-    }
-    const responseJson = new TextDecoder().decode(result.result);
-    const parsed = JSON.parse(responseJson) as {
-      status: number;
-      statusText: string;
-      headers: Record<string, string>;
-      url: string;
-      bodyBase64: string;
-    };
-    const bodyBase64 = parsed.bodyBase64 ?? "";
-    const body = atob(bodyBase64);
-    return {
-      status: parsed.status,
-      statusText: parsed.statusText,
-      headers: parsed.headers,
-      url: parsed.url,
-      body,
-      bodyBase64,
-    };
-  }
-
-  /**
    * Execute a shell command through the main thread's exec function.
    * Returns the result as { stdout, stderr, exitCode }.
    */

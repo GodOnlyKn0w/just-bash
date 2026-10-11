@@ -1,18 +1,16 @@
 /**
  * Main thread bridge handler
  *
- * Runs on the main thread and processes filesystem, I/O, HTTP, and exec
+ * Runs on the main thread and processes filesystem, I/O, and exec
  * requests from a worker thread via SharedArrayBuffer + Atomics.
  */
 
-import { fromBuffer } from "../../fs/encoding.js";
 import type { IFileSystem } from "../../fs/interface.js";
 import {
   sanitizeErrorMessage,
   sanitizeHostErrorMessage,
 } from "../../fs/sanitize-error.js";
 import { shellJoinArgs } from "../../helpers/shell-quote.js";
-import type { SecureFetch } from "../../network/fetch.js";
 import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import { _clearFiniteTimeout, _setTimeoutIfFinite } from "../../timers.js";
 import type { CommandExecOptions, ExecResult } from "../../types.js";
@@ -48,7 +46,6 @@ export class BridgeHandler {
     private fs: IFileSystem,
     private cwd: string,
     private commandName: string,
-    private secureFetch: SecureFetch | undefined = undefined,
     private maxOutputSize = 0,
     private exec:
       | ((command: string, options: CommandExecOptions) => Promise<ExecResult>)
@@ -202,9 +199,6 @@ export class BridgeHandler {
           break;
         case OpCode.EXIT:
           this.handleExit();
-          break;
-        case OpCode.HTTP_REQUEST:
-          await this.handleHttpRequest();
           break;
         case OpCode.EXEC_COMMAND:
           await this.handleExecCommand();
@@ -496,56 +490,6 @@ export class BridgeHandler {
       }
     }
     this.output.stderr += msg;
-  }
-
-  private async handleHttpRequest(): Promise<void> {
-    const fetchFn = this.secureFetch;
-    if (!fetchFn) {
-      this.protocol.setErrorCode(ErrorCode.NETWORK_NOT_CONFIGURED);
-      this.protocol.setResultFromString(
-        "Network access not configured. Enable network in Bash options.",
-      );
-      this.protocol.setStatus(Status.ERROR);
-      return;
-    }
-
-    const url = this.protocol.getPath();
-    const requestJson = this.protocol.getDataAsString();
-
-    try {
-      // @banned-pattern-ignore: fallback default for HTTP options, accessed only by known keys below
-      const request = requestJson ? JSON.parse(requestJson) : {};
-      // Cap fetch to the remaining execution deadline via raceDeadline
-      // (secureFetch uses AbortController internally for its timeoutMs,
-      // but raceDeadline guarantees we don't hang if it never settles).
-      const remaining = this.remainingMs();
-      const result = await this.raceDeadline(() =>
-        fetchFn(url, {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-          timeoutMs: remaining,
-        }),
-      );
-
-      // Return response as JSON
-      const response = JSON.stringify({
-        status: result.status,
-        statusText: result.statusText,
-        headers: result.headers,
-        bodyBase64: fromBuffer(result.body, "base64"),
-        url: result.url,
-      });
-      this.protocol.setResultFromString(response);
-      this.protocol.setStatus(Status.SUCCESS);
-    } catch (e) {
-      const message = sanitizeErrorMessage(
-        e instanceof Error ? e.message : String(e),
-      );
-      this.protocol.setErrorCode(ErrorCode.NETWORK_ERROR);
-      this.protocol.setResultFromString(message);
-      this.protocol.setStatus(Status.ERROR);
-    }
   }
 
   private async handleExecCommand(): Promise<void> {

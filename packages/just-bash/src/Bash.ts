@@ -17,7 +17,6 @@ import {
   type CommandName,
   createJavaScriptCommands,
   createLazyCommands,
-  createNetworkCommands,
   createPythonCommands,
 } from "./commands/registry.js";
 import {
@@ -59,11 +58,6 @@ import {
   type ExecutionLimits,
   resolveLimits,
 } from "./limits.js";
-import {
-  createSecureFetch,
-  type NetworkConfig,
-  type SecureFetch,
-} from "./network/index.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
 import {
@@ -165,18 +159,6 @@ export interface BashOptions {
    * @deprecated Use executionLimits.maxLoopIterations instead
    */
   maxLoopIterations?: number;
-  /**
-   * Custom secure fetch function. When provided, used instead of creating one
-   * from NetworkConfig. Enables wrapping the fetch layer with custom logic
-   * (e.g., policy evaluation) while keeping built-in curl unmodified.
-   * Network commands (curl, wget) are registered when either `fetch` or `network` is provided.
-   */
-  fetch?: SecureFetch;
-  /**
-   * Network configuration for commands like curl.
-   * Network access is disabled by default - you must explicitly configure allowed URLs.
-   */
-  network?: NetworkConfig;
   /**
    * Enable python3/python commands.
    * Python is disabled by default as it introduces additional security surface
@@ -332,7 +314,6 @@ export class Bash {
   private commands: CommandRegistry = new Map();
   private useDefaultLayout: boolean = false;
   private limits: Required<ExecutionLimits>;
-  private secureFetch?: SecureFetch;
   private sleepFn?: (ms: number) => Promise<void>;
   private traceFn?: TraceCallback;
   private logger?: BashLogger;
@@ -390,13 +371,6 @@ export class Bash {
       // Add user-provided env vars
       ...Object.entries(options.env ?? {}),
     ]);
-
-    // Create secure fetch: prefer explicit fetch, fall back to network config
-    if (options.fetch) {
-      this.secureFetch = options.fetch;
-    } else if (options.network) {
-      this.secureFetch = createSecureFetch(options.network);
-    }
 
     // Store sleep function if provided (for mock clocks in testing)
     this.sleepFn = options.sleep;
@@ -509,13 +483,6 @@ export class Bash {
 
     for (const cmd of createLazyCommands(options.commands)) {
       this.registerBundledCommand(cmd);
-    }
-
-    // Register network commands when fetch or network is configured
-    if (options.fetch || options.network) {
-      for (const cmd of createNetworkCommands()) {
-        this.registerBundledCommand(cmd);
-      }
     }
 
     // Register python commands only when explicitly enabled
@@ -891,7 +858,6 @@ export class Bash {
                 true,
                 execState,
               ),
-            fetch: this.secureFetch,
             sleep: this.sleepFn,
             trace: this.traceFn,
             coverage: this.coverageWriter,

@@ -313,7 +313,6 @@ function createRevocableCommandContext(
     execWithInheritedStdin: dataDescriptor(
       wrapFunction(context.execWithInheritedStdin),
     ),
-    fetch: dataDescriptor(wrapFunction(context.fetch)),
     getRegisteredCommands: dataDescriptor(
       wrapFunction(context.getRegisteredCommands),
     ),
@@ -902,7 +901,6 @@ export async function executeExternalCommand(
         },
         true,
       ),
-    fetch: ctx.fetch,
     getRegisteredCommands: () => Array.from(ctx.commands.keys()),
     sleep: ctx.sleep,
     trace: ctx.trace,

@@ -673,7 +673,7 @@ function createHOSTFS(
 
 /**
  * Generate the Python setup code that runs before user code.
- * Sets up environment, sys.argv, path redirection, HTTP bridge, and jb_http module.
+ * Sets up environment, sys.argv, and path redirection.
  */
 function generateSetupCode(input: WorkerInput): string {
   // Set up environment variables
@@ -704,8 +704,7 @@ def _should_redirect(path):
             path.startswith('/') and
             not path.startswith('/lib') and
             not path.startswith('/proc') and
-            not path.startswith('/host') and
-            not path.startswith('/_jb_http'))
+            not path.startswith('/host'))
 
 # builtins.open
 import builtins
@@ -996,259 +995,6 @@ os.chdir('/host' + ${JSON.stringify(input.cwd)})
 `;
 }
 
-/**
- * Create a custom Emscripten FS for the HTTP bridge.
- * Mounted at /_jb_http. Python writes a request JSON to /_jb_http/request,
- * which triggers backend.httpRequest() synchronously and stores the response.
- * Python then reads the response from the same file.
- */
-function createHTTPFS(backend: SyncBackend, FS: EmscriptenFS) {
-  // Stores the last HTTP response for read-back
-  let lastResponse: Uint8Array | null = null;
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  const HTTPFS = {
-    mount(_mount: EmscriptenMount) {
-      return HTTPFS.createNode(null, "/", 0o40755, 0);
-    },
-
-    createNode(
-      parent: EmscriptenNode | null,
-      name: string,
-      mode: number,
-      dev?: number,
-    ) {
-      const node = FS.createNode(parent, name, mode, dev);
-      node.node_ops = HTTPFS.node_ops;
-      node.stream_ops = HTTPFS.stream_ops;
-      return node;
-    },
-
-    node_ops: {
-      getattr(node: EmscriptenNode) {
-        const isDir = node.name === "/" || node.parent === node;
-        return {
-          dev: 1,
-          ino: node.id,
-          mode: isDir ? 0o40755 : 0o100666,
-          nlink: 1,
-          uid: 0,
-          gid: 0,
-          rdev: 0,
-          size: lastResponse ? lastResponse.length : 0,
-          atime: new Date(),
-          mtime: new Date(),
-          ctime: new Date(),
-          blksize: 4096,
-          blocks: 0,
-        };
-      },
-      setattr(_node: EmscriptenNode, _attr: { mode?: number; size?: number }) {
-        // no-op
-      },
-      lookup(parent: EmscriptenNode, name: string) {
-        return HTTPFS.createNode(parent, name, 0o100666);
-      },
-      mknod(parent: EmscriptenNode, name: string, mode: number, _dev: number) {
-        return HTTPFS.createNode(parent, name, mode);
-      },
-      rename() {},
-      unlink() {},
-      rmdir() {},
-      readdir(_node: EmscriptenNode) {
-        return ["request"];
-      },
-      symlink() {},
-      readlink(_node: EmscriptenNode) {
-        return "";
-      },
-    },
-
-    stream_ops: {
-      open(stream: EmscriptenStream) {
-        delete stream.hostContent;
-        stream.hostModified = false;
-
-        // If opening for read and we have a cached response, serve it
-        const accessMode = stream.flags & 3;
-        const isRead = accessMode === 0; // O_RDONLY
-        if (isRead && lastResponse) {
-          stream.hostContent = lastResponse;
-        }
-      },
-
-      close(stream: EmscriptenStream) {
-        // When the request file is closed after writing, execute the HTTP request
-        if (stream.hostModified && stream.hostContent) {
-          const reqJson = decoder.decode(stream.hostContent);
-          try {
-            const req = JSON.parse(reqJson);
-            const result = backend.httpRequest(req.url, {
-              method: req.method || "GET",
-              headers: req.headers || undefined,
-              body: req.body || undefined,
-            });
-            lastResponse = encoder.encode(JSON.stringify(result));
-          } catch (e) {
-            const message = sanitizeHostErrorMessage((e as Error).message);
-            lastResponse = encoder.encode(JSON.stringify({ error: message }));
-          }
-        }
-        delete stream.hostContent;
-        delete stream.hostModified;
-      },
-
-      read(
-        stream: EmscriptenStream,
-        buffer: Uint8Array,
-        offset: number,
-        length: number,
-        position: number,
-      ) {
-        const content = stream.hostContent;
-        if (!content) return 0;
-        const size = content.length;
-        if (position >= size) return 0;
-        const bytesToRead = Math.min(length, size - position);
-        buffer.set(content.subarray(position, position + bytesToRead), offset);
-        return bytesToRead;
-      },
-
-      write(
-        stream: EmscriptenStream,
-        buffer: Uint8Array,
-        offset: number,
-        length: number,
-        position: number,
-      ) {
-        let content = stream.hostContent || new Uint8Array(0);
-        const newSize = Math.max(content.length, position + length);
-        if (newSize > content.length) {
-          const newContent = new Uint8Array(newSize);
-          newContent.set(content);
-          content = newContent;
-          stream.hostContent = content;
-        }
-        content.set(buffer.subarray(offset, offset + length), position);
-        stream.hostModified = true;
-        return length;
-      },
-
-      llseek(stream: EmscriptenStream, offset: number, whence: number) {
-        let position = offset;
-        if (whence === 1)
-          position += stream.position; // SEEK_CUR
-        else if (whence === 2) {
-          const content = stream.hostContent;
-          position += content ? content.length : 0;
-        }
-        if (position < 0) throw new FS.ErrnoError(28); // EINVAL
-        return position;
-      },
-    },
-  };
-
-  return HTTPFS;
-}
-
-/**
- * Generate the HTTP bridge Python code.
- * Uses /_jb_http/request: write request JSON → triggers HTTP → read response JSON.
- */
-function generateHttpBridgeCode(): string {
-  return `
-# HTTP bridge: jb_http module
-# Write request JSON to /_jb_http/request (custom FS triggers HTTP via SharedArrayBuffer)
-# Then read response JSON from same path.
-
-import base64 as _base64
-
-class _JbHttpResponse:
-    """HTTP response object similar to requests.Response"""
-    def __init__(self, data):
-        self.status_code = data.get('status', 0)
-        self.reason = data.get('statusText', '')
-        # @banned-pattern-ignore: Python code, not JavaScript
-        self.headers = data.get('headers', {})
-        self.url = data.get('url', '')
-        self._error = data.get('error')
-        b64 = data.get('bodyBase64')
-        if b64 is not None:
-            self.content = _base64.b64decode(b64)
-            self.text = self.content.decode('utf-8', errors='replace')
-        else:
-            self.content = b''
-            self.text = data.get('body', '')
-
-    @property
-    def ok(self):
-        return 200 <= self.status_code < 300
-
-    def json(self):
-        return json.loads(self.text)
-
-    def raise_for_status(self):
-        if self._error:
-            raise Exception(self._error)
-        if not self.ok:
-            raise Exception(f"HTTP {self.status_code}: {self.reason}")
-
-class _JbHttp:
-    """HTTP client that bridges to just-bash's secureFetch via custom FS"""
-    def _do_request(self, method, url, headers=None, body=None):
-        import json as _json
-        req = _json.dumps({'url': url, 'method': method, 'headers': headers, 'body': body})
-        # Write request to HTTPFS — close triggers the HTTP call synchronously
-        with _orig_open('/_jb_http/request', 'w') as f:
-            f.write(req)
-        # Read response (cached by HTTPFS from the HTTP call above)
-        with _orig_open('/_jb_http/request', 'r') as f:
-            return _json.loads(f.read())
-
-    def request(self, method, url, headers=None, data=None, json_data=None):
-        if json_data is not None:
-            data = json.dumps(json_data)
-            headers = headers or {}
-            headers['Content-Type'] = 'application/json'
-        result = self._do_request(method, url, headers, data)
-        if 'error' in result and result.get('status') is None:
-            raise Exception(result['error'])
-        return _JbHttpResponse(result)
-
-    def get(self, url, headers=None, **kwargs):
-        return self.request('GET', url, headers=headers, **kwargs)
-
-    def post(self, url, headers=None, data=None, json=None, **kwargs):
-        return self.request('POST', url, headers=headers, data=data, json_data=json, **kwargs)
-
-    def put(self, url, headers=None, data=None, json=None, **kwargs):
-        return self.request('PUT', url, headers=headers, data=data, json_data=json, **kwargs)
-
-    def delete(self, url, headers=None, **kwargs):
-        return self.request('DELETE', url, headers=headers, **kwargs)
-
-    def head(self, url, headers=None, **kwargs):
-        return self.request('HEAD', url, headers=headers, **kwargs)
-
-    def patch(self, url, headers=None, data=None, json=None, **kwargs):
-        return self.request('PATCH', url, headers=headers, data=data, json_data=json, **kwargs)
-
-import types
-jb_http = types.ModuleType('jb_http')
-jb_http._client = _JbHttp()
-jb_http.get = jb_http._client.get
-jb_http.post = jb_http._client.post
-jb_http.put = jb_http._client.put
-jb_http.delete = jb_http._client.delete
-jb_http.head = jb_http._client.head
-jb_http.patch = jb_http._client.patch
-jb_http.request = jb_http._client.request
-jb_http.Response = _JbHttpResponse
-sys.modules['jb_http'] = jb_http
-`;
-}
-
 // Read stdlib zip at module load time (before defense-in-depth activates).
 import { readFileSync } from "node:fs";
 
@@ -1407,31 +1153,13 @@ async function runPython(input: WorkerInput): Promise<WorkerOutput> {
     };
   }
 
-  // Mount HTTPFS for HTTP bridge (Python writes request, FS triggers HTTP, Python reads response)
-  const HTTPFS = createHTTPFS(backend, Module.FS);
-  try {
-    Module.FS.mkdir("/_jb_http");
-    Module.FS.mount(HTTPFS, { root: "/" }, "/_jb_http");
-  } catch (e) {
-    const message = sanitizeHostErrorMessage((e as Error).message);
-    return {
-      success: false,
-      error: `Failed to mount HTTPFS: ${message}`,
-    };
-  }
-
   // Create the setup + user code as a single Python script
   const setupCode = generateSetupCode(input);
-  const httpBridgeCode = generateHttpBridgeCode();
   const wrappedCode = `
 import sys
 _jb_exit_code = 0
 try:
 ${setupCode
-  .split("\n")
-  .map((line) => `    ${line}`)
-  .join("\n")}
-${httpBridgeCode
   .split("\n")
   .map((line) => `    ${line}`)
   .join("\n")}

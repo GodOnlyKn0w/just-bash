@@ -42,7 +42,7 @@ for every input form:
 
 ## Node.js Compatibility
 
-Code written for Node.js largely works here. Both `require()` and `import` are supported, the `node:` prefix works, and standard globals like `process`, `console`, and `fetch` are available. The key difference is that **all I/O is synchronous under the hood** — there are no event loops or async I/O. `fetch()` returns `Promise<Response>` for API compatibility but resolves immediately. `fs.promises` is also provided for API compatibility.
+Code written for Node.js largely works here. Both `require()` and `import` are supported, the `node:` prefix works, and standard globals like `process` and `console` are available. The key difference is that **all I/O is synchronous under the hood** — there are no event loops or async I/O. `fs.promises` is also provided for API compatibility.
 
 ### fs
 
@@ -169,27 +169,7 @@ console.error("to stderr")
 console.warn("to stderr")
 ```
 
-### fetch
-
-Standard Web Fetch API. Returns `Promise<Response>` (resolves immediately since I/O is synchronous under the hood):
-
-```js
-const response = await fetch("https://example.com");
-const html = await response.text();
-
-const response = await fetch("https://api.example.com/data", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ key: "value" })
-});
-const data = await response.json();
-```
-
-Response properties: `status`, `statusText`, `ok`, `headers` (Headers), `url`, `body`, `bodyUsed`
-Response methods: `text()`, `json()`, `clone()`
-Static methods: `Response.json(data)`, `Response.error()`, `Response.redirect(url)`
-
-### URL / URLSearchParams / Headers / Request
+### URL / URLSearchParams / Headers / Request / Response
 
 Standard Web API classes are available as globals:
 
@@ -202,7 +182,10 @@ const headers = new Headers({ "Content-Type": "application/json" });
 console.log(headers.get("content-type")); // "application/json" (case-insensitive)
 
 const req = new Request("https://api.example.com", { method: "POST" });
-const res = await fetch(req);
+console.log(req.method); // "POST"
+
+const res = new Response('{"ok":true}', { status: 200 });
+console.log((await res.json()).ok); // true
 ```
 
 ## Modules and Imports
@@ -255,6 +238,6 @@ and/or `@executor-js/sdk` discovery (GraphQL, OpenAPI, MCP).
 ## Limits
 
 - **Memory**: 64 MB per execution
-- **Timeout**: 30 seconds normally and 10 seconds in the hardened profile; never raised by enabling network access (configurable via `maxJsTimeoutMs`, including time spent waiting for another `js-exec` invocation; `Infinity` maps to about 24.9 days)
+- **Timeout**: 30 seconds normally and 10 seconds in the hardened profile (configurable via `maxJsTimeoutMs`, including time spent waiting for another `js-exec` invocation; `Infinity` maps to about 24.9 days)
 - **Host bridge operations**: 8 MiB per-call payload ceiling, bounded by `maxJsBridgeRequests` (100,000 in the hardened profile and 1,000,000 otherwise)
 - **Engine**: QuickJS (compiled to WebAssembly)

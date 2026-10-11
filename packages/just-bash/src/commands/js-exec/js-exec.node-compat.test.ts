@@ -1179,13 +1179,13 @@ describe("js-exec Node.js compatibility", () => {
   });
 
   describe("unsupported module errors", () => {
-    it("should give clear error for require('http') with fetch hint and help pointer", async () => {
+    it("should give clear error for require('http') with hint and help pointer", async () => {
       const env = new Bash({ javascript: true });
       const result = await env.exec(
         `js-exec -c "try { require('http'); } catch(e) { console.log(e.message); }"`,
       );
       expect(result.stdout).toBe(
-        "Module 'http' is not available in the js-exec sandbox. Use fetch() for HTTP requests. Run 'js-exec --help' for available modules.\n",
+        "Module 'http' is not available in the js-exec sandbox. HTTP APIs are not supported. Run 'js-exec --help' for available modules.\n",
       );
       expect(result.exitCode).toBe(0);
     });
@@ -1196,7 +1196,7 @@ describe("js-exec Node.js compatibility", () => {
         `js-exec -c "try { require('node:http'); } catch(e) { console.log(e.message); }"`,
       );
       expect(result.stdout).toContain("not available in the js-exec sandbox");
-      expect(result.stdout).toContain("fetch()");
+      expect(result.stdout).toContain("HTTP APIs are not supported");
       expect(result.stdout).toContain("js-exec --help");
       expect(result.exitCode).toBe(0);
     });

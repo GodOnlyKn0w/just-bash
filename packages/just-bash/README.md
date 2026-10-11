@@ -2,7 +2,7 @@
 
 A virtual bash environment with an in-memory filesystem, written in TypeScript and designed for AI agents.
 
-Broad support for standard unix commands and bash syntax with optional curl, Python, JS/TS, and sqlite support.
+Broad support for standard unix commands and bash syntax with optional Python, JS/TS, and sqlite support.
 
 **Note**: This is beta software. Use at your own risk and please provide feedback. See [security model](#security-model).
 
@@ -92,7 +92,7 @@ duplicating internal defaults.
 
 ### Data Processing
 
-`jq` (JSON), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV)
+`jq` (JSON), `sqlite3` (SQLite), `xan` (CSV), `yq` (YAML/XML/TOML/CSV), `html-to-markdown` (HTML)
 
 ### Optional Runtimes
 
@@ -109,10 +109,6 @@ duplicating internal defaults.
 ### Shell Utilities
 
 `alias`, `bash`, `chmod`, `clear`, `date`, `expr`, `false`, `help`, `history`, `seq`, `sh`, `sleep`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `yes`
-
-### Network
-
-`curl`, `html-to-markdown` (require [network configuration](#network-access))
 
 All commands support `--help` for usage information.
 
@@ -245,74 +241,6 @@ const fs = new MountableFs({
 
 ## Optional Capabilities
 
-### Network Access
-
-Network access is disabled by default. Enable it with the `network` option:
-
-```typescript
-// Allow specific URLs with GET/HEAD only (safest)
-const env = new Bash({
-  network: {
-    allowedUrlPrefixes: [
-      "https://api.github.com/repos/myorg/",
-      "https://api.example.com",
-    ],
-  },
-});
-
-// Allow specific URLs with additional methods
-const env = new Bash({
-  network: {
-    allowedUrlPrefixes: ["https://api.example.com"],
-    allowedMethods: ["GET", "HEAD", "POST"], // Default: ["GET", "HEAD"]
-  },
-});
-
-// Inject credentials via header transforms (secrets never enter the sandbox)
-const env = new Bash({
-  network: {
-    allowedUrlPrefixes: [
-      "https://public-api.com", // plain string — no transforms
-      {
-        url: "https://ai-gateway.vercel.sh",
-        transform: [{ headers: { Authorization: "Bearer secret" } }],
-      },
-    ],
-  },
-});
-
-// Allow all URLs and methods (use with caution)
-const env = new Bash({
-  network: { dangerouslyAllowFullInternetAccess: true },
-});
-```
-
-**Note:** The `curl` command only exists when network is configured. Without network configuration, `curl` returns "command not found".
-
-#### Allow-List Security
-
-The allow-list enforces:
-
-- **Origin matching**: URLs must match the exact origin (scheme + host + port)
-- **Path prefix**: Only paths starting with the specified prefix are allowed
-- **HTTP method restrictions**: Only GET and HEAD by default (configure `allowedMethods` for more)
-- **Redirect protection**: Redirects to non-allowed URLs are blocked
-- **Header transforms**: Firewall headers are injected at the fetch boundary and override any user-supplied headers with the same name, preventing credential substitution from inside the sandbox. Headers are re-evaluated on each redirect so credentials are never leaked to non-transform hosts
-
-#### Using curl
-
-```bash
-# Fetch and process data
-curl -s https://api.example.com/data | grep pattern
-
-# Download and convert HTML to Markdown
-curl -s https://example.com | html-to-markdown
-
-# POST JSON data
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"key":"value"}' https://api.example.com/endpoint
-```
-
 ### JavaScript Support
 
 JavaScript and TypeScript execution via QuickJS is opt-in due to additional security surface. Enable with `javascript: true`:
@@ -359,11 +287,11 @@ await env.exec('js-exec -c "console.log(API_BASE)"');
 - **child_process**: `execSync`, `spawnSync`
 - **process**: `argv`, `cwd()`, `exit()`, `env`, `platform`, `version`
 - **Other modules**: `os`, `url`, `assert`, `util`, `events`, `buffer`, `stream`, `string_decoder`, `querystring`
-- **Globals**: `console`, `fetch`, `Buffer`, `URL`, `URLSearchParams`
+- **Globals**: `console`, `Buffer`, `URL`, `URLSearchParams`, `Headers`, `Request`, `Response`
 
 `fs.readFileSync()` returns a `Buffer` by default (matching Node.js). Pass an encoding like `'utf8'` to get a string.
 
-**Note:** The `js-exec` command only exists when `javascript` is configured. It is not available in browser environments. Execution uses the `run` package's QuickJS sandbox with a 64 MB memory limit and configurable timeout (30 seconds in the default `normal` profile and 10 seconds in the opt-in `hardened` profile). Enabling network access does not extend the configured deadline.
+**Note:** The `js-exec` command only exists when `javascript` is configured. It is not available in browser environments. Execution uses the `run` package's QuickJS sandbox with a 64 MB memory limit and configurable timeout (30 seconds in the default `normal` profile and 10 seconds in the opt-in `hardened` profile).
 
 #### Tool Invocation Hook
 
@@ -523,7 +451,7 @@ The Node.js package requires Node `>=20.19`.
 
 - The shell only has access to the provided filesystem.
 - All execution happens without VM isolation. This does introduce additional risk. The code base was designed to be robust against prototype-pollution attacks and other break outs to the host JS engine and filesystem.
-- There is no network access by default. When enabled, requests are checked against URL prefix allow-lists and HTTP-method allow-lists.
+- There is no network access.
 - Python and JavaScript execution are off by default as they represent additional security surface.
 - `js-exec` guest code runs inside the `run` package's QuickJS/WASM realm. Its
   primary isolation boundary is QuickJS plus the validated, bounded host

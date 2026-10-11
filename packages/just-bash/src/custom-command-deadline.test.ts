@@ -198,21 +198,6 @@ describe("custom command deadline boundary", () => {
     expect(result.exitCode).toBe(124);
   });
 
-  it("bounds an abort-ignorant fetch hook", async () => {
-    const bash = new Bash({
-      defenseInDepth: false,
-      fetch: async () => never(),
-      executionLimits: {
-        maxExecutionTimeMs: 1_000,
-        maxExtensionCleanupTimeMs: 5,
-      },
-    });
-
-    const result = await bash.exec("timeout 0.01 curl https://example.com");
-
-    expect(result.exitCode).toBe(124);
-  });
-
   it("revokes shell capabilities from a late continuation", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {

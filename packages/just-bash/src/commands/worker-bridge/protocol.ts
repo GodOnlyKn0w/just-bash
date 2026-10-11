@@ -41,8 +41,6 @@ export const OpCode = {
   WRITE_STDOUT: 100,
   WRITE_STDERR: 101,
   EXIT: 102,
-  // HTTP operations
-  HTTP_REQUEST: 200,
   // Sub-shell execution
   EXEC_COMMAND: 300,
   // Tool invocation (executor mode)
@@ -72,8 +70,6 @@ export const ErrorCode = {
   INVALID_PATH: 6,
   IO_ERROR: 7,
   TIMEOUT: 8,
-  NETWORK_ERROR: 9,
-  NETWORK_NOT_CONFIGURED: 10,
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -96,7 +92,7 @@ const Offset = {
 const Size = {
   CONTROL_REGION: 32,
   PATH_BUFFER: 4096,
-  // 8MB limit for FS read/write, HTTP responses, and tool invocation results.
+  // 8MB limit for FS read/write and tool invocation results.
   // Sized to handle typical OpenAPI/GraphQL responses (paginated lists, batch queries).
   // Still well under the 64MB QuickJS memory limit per execution.
   DATA_BUFFER: 8388608,

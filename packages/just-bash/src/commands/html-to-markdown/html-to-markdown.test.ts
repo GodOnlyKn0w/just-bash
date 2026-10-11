@@ -222,7 +222,7 @@ describe("html-to-markdown", () => {
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("Examples:");
       expect(result.stdout).toContain("echo");
-      expect(result.stdout).toContain("curl");
+      expect(result.stdout).toContain("page.md");
     });
 
     it("documents supported HTML elements", async () => {

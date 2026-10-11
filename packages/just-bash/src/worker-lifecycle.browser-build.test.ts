@@ -16,7 +16,6 @@ describe("WorkerLifecycle browser build", () => {
       define: { __BROWSER__: "true" },
       alias: {
         "node:async_hooks": shim,
-        "node:dns": shim,
         "node:module": shim,
       },
     });
