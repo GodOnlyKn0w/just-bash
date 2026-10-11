@@ -43,7 +43,7 @@ export interface MountableFsOptions {
   mounts?: MountConfig[];
 }
 
-// Sync writes that InMemoryFs and OverlayFs add to IFileSystem
+// Sync writes that InMemoryFs adds to IFileSystem
 type SyncWrites = Partial<{
   mkdirSync(path: string, options?: MkdirOptions): void;
   writeFileSync(path: string, content: string | Uint8Array): void;
@@ -53,14 +53,14 @@ type SyncWrites = Partial<{
  * A filesystem that supports mounting other filesystems at specific paths.
  *
  * This allows combining multiple filesystem backends into a unified namespace.
- * For example, mounting a read-only knowledge base at /mnt/knowledge and a
- * read-write workspace at /home/agent.
+ * For example, mounting a knowledge base at /mnt/knowledge and a workspace at
+ * /home/agent.
  *
  * @example
  * ```typescript
  * const fs = new MountableFs({ base: new InMemoryFs() });
- * fs.mount('/mnt/knowledge', new OverlayFs({ root: "/path/to/knowledge", readOnly: true }));
- * fs.mount('/home/agent', new ReadWriteFs({ root: "/path/to/workspace" }));
+ * fs.mount('/mnt/knowledge', new InMemoryFs({ "/README.md": "# Notes" }));
+ * fs.mount('/home/agent', new InMemoryFs());
  * ```
  */
 export class MountableFs implements IFileSystem {

@@ -2,8 +2,6 @@
  * Pure path utilities for virtual filesystems.
  *
  * No node:fs or node:path dependencies — safe for browser bundles.
- * Real-FS-backed implementations should import from real-fs-utils.ts
- * (which re-exports these) to keep a single import source.
  */
 
 /** Maximum depth for symlink resolution loops. */

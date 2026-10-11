@@ -75,11 +75,6 @@ export {
   type MountableFsOptions,
   type MountConfig,
 } from "./fs/mountable-fs/index.js";
-export { OverlayFs, type OverlayFsOptions } from "./fs/overlay-fs/index.js";
-export {
-  ReadWriteFs,
-  type ReadWriteFsOptions,
-} from "./fs/read-write-fs/index.js";
 export type {
   AllowedUrl,
   AllowedUrlEntry,
@@ -94,14 +89,6 @@ export {
 } from "./network/index.js";
 // Parser
 export { parse } from "./parser/parser.js";
-export type {
-  CommandFinished as SandboxCommandFinished,
-  OutputMessage,
-  SandboxOptions,
-  WriteFilesInput,
-} from "./sandbox/index.js";
-// Vercel Sandbox API compatible exports
-export { Command as SandboxCommand, Sandbox } from "./sandbox/index.js";
 // Security module - defense-in-depth
 export type {
   DefenseInDepthConfig,

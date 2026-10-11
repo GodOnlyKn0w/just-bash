@@ -2,7 +2,7 @@
  * E2E tests for allow-list enforcement via bash execution
  *
  * These tests verify that the allow-list is correctly enforced when using
- * curl commands through BashEnv and Sandbox.create.
+ * curl commands through BashEnv.
  */
 
 import { lookup } from "node:dns/promises";
@@ -11,7 +11,6 @@ import {
   type AdapterFactory,
   createBashEnvAdapter,
   createMockFetch,
-  createSandboxAdapter,
   expectBlockedPrivate,
   MOCK_EVIL_BODY,
   MOCK_FILE_BODY,
@@ -503,6 +502,4 @@ function runAllowListTests(name: string, createAdapter: AdapterFactory) {
   });
 }
 
-// Run tests with both BashEnv and Sandbox adapters
 runAllowListTests("BashEnv", createBashEnvAdapter);
-runAllowListTests("Sandbox", createSandboxAdapter);

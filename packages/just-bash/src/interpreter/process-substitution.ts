@@ -160,10 +160,9 @@ class ProcessSubstitutionFs extends InMemoryFs {
  * Give `/dev/fd` a private, always-writable filesystem for the rest of this
  * execution.
  *
- * A read-only sandbox (`OverlayFs({ readOnly: true })` — the `just-bash` CLI's
- * default) rejects every write. That forbids the *script* from modifying the
- * filesystem it was handed, but a process substitution is a pipe, not a file
- * write: real bash runs `cat <(cmd)` and `tee >(cmd)` fine on a read-only
+ * A read-only filesystem rejects every write. That forbids the *script* from
+ * modifying the filesystem it was handed, but a process substitution is a
+ * pipe, not a file write: real bash runs `cat <(cmd)` and `tee >(cmd)` fine on a read-only
  * mount. Both directions need writes to succeed — `<(cmd)` to materialise the
  * body's output, and `>(cmd)` for the *outer* command (`tee`, a `>` redirect,
  * any command handed the path) to write into it.

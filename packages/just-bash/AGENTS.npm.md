@@ -62,15 +62,13 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 1. **Isolation**: Each `exec()` call is isolated. Environment variables, functions, and cwd changes don't persist between calls. Only filesystem changes persist.
 
-2. **No real filesystem**: By default, commands only see the virtual filesystem. Use `OverlayFs` to read from a real directory (writes stay in memory).
+2. **No real filesystem**: Commands only see the virtual filesystem.
 
 3. **No network by default**: `curl` doesn't exist unless you configure `network` options with URL allowlists.
 
 4. **No binaries/WASM**: Only built-in commands work. You cannot run node, python, or other binaries.
 
-5. **ReadWriteFs root separation**: If you use `ReadWriteFs`, point it at a workspace directory, not at the installed `just-bash` package or other trusted runtime code.
-
-6. **UTC by default**: `date` always shows UTC (`%Z=UTC`, `%z=+0000`) unless the host opts in by passing `TZ` as an env var (e.g. `new Bash({ env: { TZ: "America/New_York" } })`). `-u` always forces UTC; an invalid `$TZ` falls back to UTC.
+5. **UTC by default**: `date` always shows UTC (`%Z=UTC`, `%z=+0000`) unless the host opts in by passing `TZ` as an env var (e.g. `new Bash({ env: { TZ: "America/New_York" } })`). `-u` always forces UTC; an invalid `$TZ` falls back to UTC.
 
 ## Available Commands
 
@@ -304,8 +302,6 @@ const bash = new Bash({
 ```
 
 **Output size limits**: AWK, sed, jq, and printf enforce `maxStringLength` on their output buffers. Commands that exceed the limit exit with code 126.
-
-**File read size limits**: `OverlayFs` and `ReadWriteFs` default to a 10MB max file read size. Override with `maxFileReadSize` in filesystem options (set to `0` to disable).
 
 **Network response size**: `maxResponseSize` in `NetworkConfig` caps HTTP response bodies (default: 10MB).
 

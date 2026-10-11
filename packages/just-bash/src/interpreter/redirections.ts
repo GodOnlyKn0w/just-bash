@@ -1252,8 +1252,7 @@ export async function applyRedirections(
         }
         // /dev/null on fd 2 drops stderr without touching the VFS node.
         // /dev/null on fd 1 intentionally falls through to the generic file
-        // path: in this VFS it is a regular file, not a true discard device
-        // (see overlay-fs.security.test.ts "/dev file overwrite behavior").
+        // path: in this VFS it is a regular file, not a true discard device.
         if (target === "/dev/null" && fd === 2) {
           fd2Sink = { kind: "discard" };
           break;

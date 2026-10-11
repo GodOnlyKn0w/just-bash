@@ -1,13 +1,9 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
 import { defineCommand } from "../../custom-commands.js";
 import { InMemoryFs } from "../in-memory-fs/in-memory-fs.js";
 import { initFilesystem } from "../init.js";
 import type { IFileSystem } from "../interface.js";
-import { ReadWriteFs } from "../read-write-fs/read-write-fs.js";
 import { MountableFs } from "./mountable-fs.js";
 
 const hello = defineCommand("hello", async () => ({
@@ -16,17 +12,18 @@ const hello = defineCommand("hello", async () => ({
   exitCode: 0,
 }));
 
+/** The InMemoryFs behind it, seen without the sync writes InMemoryFs adds. */
+function withoutSyncWrites(inner: InMemoryFs): IFileSystem {
+  return new Proxy(inner, {
+    get(target, key) {
+      if (key === "mkdirSync" || key === "writeFileSync") return undefined;
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 describe("MountableFs standard layout under Bash", () => {
-  let hostDir: string;
-
-  beforeEach(() => {
-    hostDir = fs.mkdtempSync(path.join(os.tmpdir(), "mount-layout-"));
-  });
-
-  afterEach(() => {
-    fs.rmSync(hostDir, { recursive: true, force: true });
-  });
-
   it("sets up /dev, /proc and command stubs in its base", async () => {
     const bash = new Bash({
       fs: new MountableFs({ base: new InMemoryFs() }),
@@ -74,8 +71,10 @@ describe("MountableFs standard layout under Bash", () => {
   });
 
   it("throws ENOSYS for sync writes to a filesystem without them", () => {
+    const inner = new InMemoryFs();
+    const before = inner.getAllPaths();
     const mounted = new MountableFs({ base: new InMemoryFs() });
-    mounted.mount("/data", new ReadWriteFs({ root: hostDir }));
+    mounted.mount("/data", withoutSyncWrites(inner));
 
     expect(() => mounted.writeFileSync("/data/a.txt", "a")).toThrow(
       "ENOSYS: function not implemented, write '/data/a.txt'",
@@ -83,30 +82,34 @@ describe("MountableFs standard layout under Bash", () => {
     expect(() => mounted.mkdirSync("/data/dir")).toThrow(
       "ENOSYS: function not implemented, mkdir '/data/dir'",
     );
-    expect(fs.readdirSync(hostDir)).toEqual([]);
+    expect(inner.getAllPaths()).toEqual(before);
   });
 
-  it("leaves a mounted ReadWriteFs out of the layout", async () => {
+  it("leaves a mounted filesystem without sync writes out of the layout", async () => {
+    const inner = new InMemoryFs();
+    const before = inner.getAllPaths();
     const mounted = new MountableFs({ base: new InMemoryFs() });
-    mounted.mount("/usr", new ReadWriteFs({ root: hostDir }));
+    mounted.mount("/usr", withoutSyncWrites(inner));
 
     const bash = new Bash({ fs: mounted, customCommands: [hello] });
     const result = await bash.exec("ls -d /bin/hello /tmp");
 
     expect(result.stdout).toBe("/bin/hello\n/tmp\n");
     expect(result.stderr).toBe("");
-    expect(fs.readdirSync(hostDir)).toEqual([]);
+    expect(inner.getAllPaths()).toEqual(before);
   });
 
-  it("writes nothing to a ReadWriteFs base", async () => {
+  it("writes nothing to a base without sync writes", async () => {
+    const inner = new InMemoryFs();
+    const before = inner.getAllPaths();
     const bash = new Bash({
-      fs: new MountableFs({ base: new ReadWriteFs({ root: hostDir }) }),
+      fs: new MountableFs({ base: withoutSyncWrites(inner) }),
     });
 
     const result = await bash.exec("echo ok");
 
     expect(result.stdout).toBe("ok\n");
-    expect(fs.readdirSync(hostDir)).toEqual([]);
+    expect(inner.getAllPaths()).toEqual(before);
   });
 
   it("still fails on layout errors other than ENOSYS", () => {

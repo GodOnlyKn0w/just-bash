@@ -10,7 +10,7 @@ import type { IFileSystem } from "./interface.js";
 
 /**
  * Interface for filesystems that support sync initialization
- * (both InMemoryFs and OverlayFs implement these)
+ * (InMemoryFs and MountableFs implement these)
  */
 interface SyncInitFs {
   mkdirSync(path: string, options?: { recursive?: boolean }): void;
@@ -103,14 +103,14 @@ function initProcFiles(fs: SyncInitFs, processInfo: VirtualProcessInfo): void {
 
 /**
  * Initialize the filesystem with standard directories and files
- * Works with both InMemoryFs and OverlayFs (both write to memory)
+ * Works with filesystems that support sync writes
  */
 export function initFilesystem(
   fs: IFileSystem,
   useDefaultLayout: boolean,
   processInfo: VirtualProcessInfo = { pid: 1, ppid: 0, uid: 1000, gid: 1000 },
 ): void {
-  // Initialize for filesystems that support sync methods (InMemoryFs, OverlayFs and MountableFs)
+  // Initialize for filesystems that support sync methods (InMemoryFs and MountableFs)
   if (isSyncInitFs(fs)) {
     const layoutFs = skipUnsupported(fs);
     initCommonDirectories(layoutFs, useDefaultLayout);
@@ -120,8 +120,8 @@ export function initFilesystem(
 }
 
 /**
- * Skip paths a MountableFs routes to a filesystem without sync writes, such
- * as ReadWriteFs. It throws ENOSYS for those.
+ * Skip paths a MountableFs routes to a filesystem without sync writes. It
+ * throws ENOSYS for those.
  */
 function skipUnsupported(fs: SyncInitFs): SyncInitFs {
   const attempt = (write: () => void) => {

@@ -11,7 +11,6 @@
  * Options:
  *   --print-ast   Show the parsed AST
  *   --real-bash   Also run the script with real bash for comparison
- *   --root <path> Use OverlayFS with specified root directory
  *   --no-limit    Remove execution limits (for large scripts)
  *
  * Output:
@@ -23,22 +22,13 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
 import { Bash } from "../Bash.js";
-import { OverlayFs } from "../fs/overlay-fs/index.js";
 import { parse } from "../parser/parser.js";
 import { getDevExecutionLimits } from "./exec-limits.js";
 
 const showAst = process.argv.includes("--print-ast");
 const runRealBash = process.argv.includes("--real-bash");
 const noLimit = process.argv.includes("--no-limit");
-
-// Parse --root option
-let rootPath: string | undefined;
-const rootIndex = process.argv.indexOf("--root");
-if (rootIndex !== -1 && rootIndex + 1 < process.argv.length) {
-  rootPath = resolve(process.argv[rootIndex + 1]);
-}
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -79,19 +69,9 @@ if (showAst) {
   console.log("AST: Request with --print-ast");
 }
 
-// Create Bash environment with optional OverlayFS
 // Use high limits for dev:exec (typical use is exploration of large filesystems)
 const executionLimits = getDevExecutionLimits(noLimit);
-
-let env: Bash;
-if (rootPath) {
-  const fs = new OverlayFs({ root: rootPath });
-  const mountPoint = fs.getMountPoint();
-  env = new Bash({ fs, cwd: mountPoint, executionLimits, javascript: true });
-  console.log(`OverlayFS: ${rootPath} mounted at ${mountPoint}`);
-} else {
-  env = new Bash({ executionLimits, javascript: true });
-}
+const env = new Bash({ executionLimits, javascript: true });
 const r = await env.exec(script);
 console.log("exitCode:", r.exitCode);
 console.log("stderr:", JSON.stringify(r.stderr));

@@ -18,7 +18,6 @@
     "test:examples": "pnpm --filter cjs-consumer-example typecheck",
     "check:worker-sync": "pnpm --filter just-bash check:worker-sync",
     "check:deepsec-revalidation": "node scripts/check-deepsec-revalidation.mjs",
-    "shell": "pnpm --filter just-bash shell",
     "dev:exec": "pnpm --filter just-bash dev:exec",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only",

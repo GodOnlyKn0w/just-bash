@@ -37,7 +37,7 @@ function isTrustedCommandStub(path: string, commandName: string): boolean {
  * Resolution order:
  * 1. If command contains "/", resolve as a path
  * 2. Search PATH directories for the command file
- * 3. Fall back to registry lookup (for non-InMemoryFs filesystems like OverlayFs)
+ * 3. Fall back to registry lookup (for filesystems without command stubs)
  */
 export async function resolveCommand(
   ctx: CommandResolutionContext,
@@ -148,8 +148,8 @@ export async function resolveCommand(
   }
 
   // Fallback: check registry directly only if /usr/bin doesn't exist
-  // This maintains backward compatibility for OverlayFs and other non-InMemoryFs
-  // where command stubs aren't created, while still respecting PATH for InMemoryFs
+  // This covers filesystems where command stubs aren't created, while still
+  // respecting PATH for InMemoryFs
   const usrBinExists = await ctx.fs.exists("/usr/bin");
   if (!usrBinExists) {
     const cmd = ctx.commands.get(commandName);

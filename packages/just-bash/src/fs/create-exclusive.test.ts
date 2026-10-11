@@ -6,7 +6,6 @@ import {
 import { InMemoryFs } from "./in-memory-fs/in-memory-fs.js";
 import type { IFileSystem } from "./interface.js";
 import { MountableFs } from "./mountable-fs/mountable-fs.js";
-import { OverlayFs } from "./overlay-fs/overlay-fs.js";
 
 describe("createExclusiveOn", () => {
   it("uses the filesystem's own exclusive create when available", async () => {
@@ -52,54 +51,5 @@ describe("createExclusiveOn", () => {
 
     expect(await mounted.exists("/mnt/file.txt")).toBe(true);
     expect((await mounted.stat("/mnt/file.txt")).mode & 0o777).toBe(0o600);
-  });
-});
-
-describe("OverlayFs createExclusive", () => {
-  it("clears a tombstone so the new entry is visible", async () => {
-    const fs = new OverlayFs({ root: process.cwd() });
-    await fs.writeFile("/tomb.txt", "first");
-    await fs.rm("/tomb.txt");
-    expect(await fs.exists("/tomb.txt")).toBe(false);
-
-    await fs.createExclusive("/tomb.txt", { mode: 0o600 });
-
-    // Without clearing this.deleted the entry exists but is invisible.
-    expect(await fs.exists("/tomb.txt")).toBe(true);
-    expect((await fs.stat("/tomb.txt")).mode & 0o777).toBe(0o600);
-    expect(await fs.readFile("/tomb.txt")).toBe("");
-  });
-
-  it("rejects a parent that is not a directory", async () => {
-    const fs = new OverlayFs({ root: process.cwd() });
-    await fs.writeFile("/afile", "data");
-
-    await expect(
-      fs.createExclusive("/afile/child", { mode: 0o600 }),
-    ).rejects.toThrow("ENOTDIR");
-  });
-
-  it("resolves a symlinked parent instead of creating beside it", async () => {
-    // Symlinks are blocked by default, so this only arises for embedders that
-    // opt in; it still must not produce an entry nothing can look up.
-    const fs = new OverlayFs({ root: process.cwd(), allowSymlinks: true });
-    await fs.mkdir("/real", { recursive: true });
-    await fs.symlink("/real", "/link");
-
-    await fs.createExclusive("/link/file.txt", { mode: 0o600 });
-
-    expect(await fs.exists("/real/file.txt")).toBe(true);
-    expect(await fs.readdir("/real")).toContain("file.txt");
-  });
-
-  it("is exclusive between interleaved concurrent calls", async () => {
-    const fs = new OverlayFs({ root: process.cwd() });
-    const results = await Promise.allSettled([
-      fs.createExclusive("/race.txt", { mode: 0o600 }),
-      fs.createExclusive("/race.txt", { mode: 0o600 }),
-      fs.createExclusive("/race.txt", { mode: 0o600 }),
-    ]);
-    const fulfilled = results.filter((r) => r.status === "fulfilled");
-    expect(fulfilled).toHaveLength(1);
   });
 });

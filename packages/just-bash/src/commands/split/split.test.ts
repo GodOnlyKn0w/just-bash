@@ -1,10 +1,7 @@
 import * as nodeFs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
-import { ReadWriteFs } from "../../fs/read-write-fs/read-write-fs.js";
 
 const temporaryRoots: string[] = [];
 
@@ -71,39 +68,6 @@ describe("split", () => {
       expect(Array.from(chunks.flatMap((chunk) => Array.from(chunk)))).toEqual([
         0, 0x7f, 0x80, 0xff, 10,
       ]);
-    });
-
-    it.each([
-      ["alphabetic", "split -b 2 /input /x", "xaa", "xab"],
-      ["numeric", "split -d -b 2 /input /x", "x00", "x01"],
-      [
-        "additional suffix",
-        "split --additional-suffix=.part -b 2 /input /x",
-        "xaa.part",
-        "xab.part",
-      ],
-    ])("does not truncate a real-backed input through a %s hard-link alias", async (_mode, command, firstOutput, secondOutput) => {
-      const root = nodeFs.mkdtempSync(
-        path.join(os.tmpdir(), "split-hardlink-"),
-      );
-      temporaryRoots.push(root);
-      nodeFs.writeFileSync(path.join(root, "input"), "abcdef");
-      nodeFs.linkSync(path.join(root, "input"), path.join(root, firstOutput));
-      const bash = new Bash({
-        fs: new ReadWriteFs({ root, allowSymlinks: true }),
-      });
-
-      const result = await bash.exec(command);
-
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("would overwrite input");
-      expect(nodeFs.readFileSync(path.join(root, "input"), "utf8")).toBe(
-        "abcdef",
-      );
-      expect(nodeFs.readFileSync(path.join(root, firstOutput), "utf8")).toBe(
-        "abcdef",
-      );
-      expect(nodeFs.existsSync(path.join(root, secondOutput))).toBe(false);
     });
 
     it("rolls back every visible output when a staged commit fails", async () => {

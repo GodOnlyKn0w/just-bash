@@ -353,7 +353,7 @@ async function getSqliteVersion(): Promise<string> {
  * Find the sqlite3 worker.js file path.
  *
  * The worker is shipped via two routes by `build:worker`:
- *   - `dist/bin/chunks/sqlite3-worker.js` and `dist/bundle/chunks/sqlite3-worker.js`
+ *   - `dist/bundle/chunks/sqlite3-worker.js`
  *     (uniquely named so it never collides with `chunks/worker.js`, which is python3's worker)
  *   - `dist/commands/sqlite3/worker.js` (also listed in package.json `files`)
  *

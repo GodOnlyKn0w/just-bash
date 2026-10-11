@@ -1,6 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
 import { createDefaultOptions } from "../commands/rg/rg-options.js";
@@ -10,7 +8,6 @@ import {
   unsafeBytesFromLatin1,
 } from "../encoding.js";
 import { InMemoryFs } from "../fs/in-memory-fs/in-memory-fs.js";
-import { OverlayFs } from "../fs/overlay-fs/overlay-fs.js";
 import { createUserRegex } from "../regex/index.js";
 
 describe("DeepSec general/core resource follow-up", () => {
@@ -232,18 +229,4 @@ afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
     fs.rmSync(root, { recursive: true, force: true });
   }
-});
-
-describe("OverlayFs append storage", () => {
-  it("preserves repeated appends without re-copying on each append", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "overlay-append-"));
-    temporaryRoots.push(root);
-    const overlay = new OverlayFs({ root, mountPoint: "/" });
-    await overlay.writeFile("/log", "a");
-    for (let index = 0; index < 100; index++) {
-      await overlay.appendFile("/log", "b");
-    }
-    expect(await overlay.readFile("/log")).toBe(`a${"b".repeat(100)}`);
-    expect((await overlay.stat("/log")).size).toBe(101);
-  });
 });

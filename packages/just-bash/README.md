@@ -192,7 +192,7 @@ await bash.exec("date"); // Mon Jun  1 09:30:00 EDT 2026
 
 ## Filesystem Options
 
-Four filesystem implementations:
+Two filesystem implementations:
 
 **InMemoryFs** (default) - Pure in-memory filesystem, no disk access:
 
@@ -209,102 +209,18 @@ const env = new Bash({
 });
 ```
 
-**OverlayFs** - Copy-on-write over a real directory. Reads come from disk, writes stay in memory:
-
-```typescript
-import { Bash } from "just-bash";
-import { OverlayFs } from "just-bash/fs/overlay-fs";
-
-const overlay = new OverlayFs({
-  root: "/path/to/project",
-  // Copy-on-write data is bounded independently from real-file reads.
-  maxMemoryBytes: 256 * 1024 * 1024,
-});
-const env = new Bash({ fs: overlay, cwd: overlay.getMountPoint() });
-
-await env.exec("cat package.json"); // reads from disk
-await env.exec('echo "modified" > package.json'); // stays in memory
-```
-
-`maxMemoryBytes` defaults to 1 GiB and covers aggregate files retained in the
-copy-on-write layer, including append chunks. Set it to the deployment's memory
-budget when an `OverlayFs` is reused across executions.
-
-**ReadWriteFs** - Direct read-write access to a real directory. Use this if you want the agent to be able to write to your disk:
-
-```typescript
-import { Bash } from "just-bash";
-import { ReadWriteFs } from "just-bash/fs/read-write-fs";
-
-const rwfs = new ReadWriteFs({ root: "/path/to/sandbox" });
-const env = new Bash({ fs: rwfs });
-
-await env.exec('echo "hello" > file.txt'); // writes to real filesystem
-```
-
-Keep `ReadWriteFs` pointed at a workspace directory, not at the installed `just-bash` package or any other trusted runtime code. Guest-writable roots should stay separate from trusted code.
-
-`ReadWriteFs` uses normal in-place filesystem operations for private regular
-files. For multiply-linked regular files, it isolates append and metadata
-changes by copying the file and replacing only the sandbox directory entry, so
-a host-created hard link cannot carry those changes beyond the configured root.
-Implicit copies are limited by `maxCopyOnWriteSize` (100 MB by default; set it
-to `0` to disable the limit). Overwrite does not need to copy existing content.
-Explicit `cp` copies can be limited with the opt-in `maxCopySize` option
-(unlimited by default). The portable copy path may materialize sparse-file
-holes, so embeddings that require a disk-allocation bound should configure
-`maxCopySize`.
-
-Shared-inode isolation has a few deliberate limitations:
-
-- Append, `chmod`, and `utimes` on a multiply-linked regular file require read
-  access to the file and write access to its parent directory. They fail with
-  `EFBIG` when the file exceeds `maxCopyOnWriteSize`.
-- Copies use `O_NOATIME` when the Node.js runtime exposes it and retry with
-  normal read semantics if the kernel returns `EPERM`. Runtimes and platforms
-  without `O_NOATIME` may update access-time metadata visible through another
-  hard link.
-- Do not mutate a `ReadWriteFs` root concurrently through direct host filesystem
-  APIs. Node.js does not expose the descriptor-relative operations needed to
-  make pathname validation atomic against an external actor. A concurrent host
-  append to a multiply-linked file may be lost when the isolated entry is
-  replaced.
-- Mutations in overlapping `ReadWriteFs` roots are serialized within the
-  process. Unrelated roots proceed independently. The queue is not cancellable
-  or bounded, so a large mutation can delay later operations in overlapping
-  roots even if the requesting script is subsequently aborted.
-- Content writes and appends to FIFOs, sockets, devices, and other special files
-  are rejected. This avoids indefinitely occupying an overlapping-root mutation
-  slot on a blocking special-file open. Metadata operations remain supported
-  for single-link special files; multiply-linked special files are rejected
-  because they cannot be isolated without changing their file type.
-- Private-file and single-link special-file metadata operations use pathname
-  APIs to preserve normal host permission semantics. They are not atomic
-  against a trusted host actor concurrently replacing that pathname with a
-  symlink. With `allowSymlinks: false`, symlinks present during normal path
-  validation are still rejected.
-- Copying a symlink preserves whether its guest target is absolute or relative.
-  Only symlinks whose resolved targets remain inside the root are copied.
-- Regular-file copies replace the destination entry to prevent writes through
-  hard links. Existing destinations must still be writable, and their parent
-  directory must be writable so the isolated entry can be committed. Thus a
-  writable destination in a non-writable directory cannot be copied over.
-  Copying over a FIFO, socket, device, or other special entry is rejected.
-
-**MountableFs** - Mount multiple filesystems at different paths. Combines read-only and read-write filesystems into a unified namespace:
+**MountableFs** - Mount multiple filesystems at different paths into a unified namespace. A mounted filesystem sees paths relative to its mount point:
 
 ```typescript
 import { Bash, MountableFs, InMemoryFs } from "just-bash";
-import { OverlayFs } from "just-bash/fs/overlay-fs";
-import { ReadWriteFs } from "just-bash/fs/read-write-fs";
 
 const fs = new MountableFs({ base: new InMemoryFs() });
 
-// Mount read-only knowledge base
-fs.mount("/mnt/knowledge", new OverlayFs({ root: "/path/to/knowledge", readOnly: true }));
+// Mount a knowledge base
+fs.mount("/mnt/knowledge", new InMemoryFs({ "/doc.txt": "notes\n" }));
 
-// Mount read-write workspace
-fs.mount("/home/agent", new ReadWriteFs({ root: "/path/to/workspace" }));
+// Mount a workspace
+fs.mount("/home/agent", new InMemoryFs());
 
 const bash = new Bash({ fs, cwd: "/home/agent" });
 
@@ -317,14 +233,12 @@ You can also configure mounts in the constructor:
 
 ```typescript
 import { MountableFs, InMemoryFs } from "just-bash";
-import { OverlayFs } from "just-bash/fs/overlay-fs";
-import { ReadWriteFs } from "just-bash/fs/read-write-fs";
 
 const fs = new MountableFs({
   base: new InMemoryFs(),
   mounts: [
-    { mountPoint: "/data", filesystem: new OverlayFs({ root: "/shared/data" }) },
-    { mountPoint: "/workspace", filesystem: new ReadWriteFs({ root: "/tmp/work" }) },
+    { mountPoint: "/data", filesystem: new InMemoryFs() },
+    { mountPoint: "/workspace", filesystem: new InMemoryFs() },
   ],
 });
 ```
@@ -572,86 +486,6 @@ const result = await generateText({
 
 See [bash-tool](https://github.com/vercel-labs/bash-tool) for more.
 
-### Vercel Sandbox Compatible API
-
-`Sandbox` is a drop-in replacement for [`@vercel/sandbox`](https://vercel.com/docs/vercel-sandbox) — same API, but runs entirely in-process with the virtual filesystem. Start with just-bash for development and testing, swap in a real sandbox when you need a full VM.
-
-```typescript
-import { Sandbox } from "just-bash";
-
-// Create a sandbox instance
-const sandbox = await Sandbox.create({ cwd: "/app" });
-
-// Write files to the virtual filesystem
-await sandbox.writeFiles({
-  "/app/script.sh": 'echo "Hello World"',
-  "/app/data.json": '{"key": "value"}',
-});
-
-// Run commands and get results
-const cmd = await sandbox.runCommand("bash /app/script.sh");
-const output = await cmd.stdout(); // "Hello World\n"
-const exitCode = (await cmd.wait()).exitCode; // 0
-
-// Read files back
-const content = await sandbox.readFile("/app/data.json");
-
-// Create directories
-await sandbox.mkDir("/app/logs", { recursive: true });
-
-// Clean up (no-op for Bash, but API-compatible)
-await sandbox.stop();
-```
-
-## CLI
-
-### CLI Binary
-
-Install globally (`npm install -g just-bash`) for a sandboxed CLI:
-
-```bash
-# Execute inline script
-just-bash -c 'ls -la && cat package.json | head -5'
-
-# Execute with specific project root
-just-bash -c 'grep -r "TODO" src/' --root /path/to/project
-
-# Pipe script from stdin
-echo 'find . -name "*.ts" | wc -l' | just-bash
-
-# Execute a script file
-just-bash ./scripts/deploy.sh
-
-# Get JSON output for programmatic use
-just-bash -c 'echo hello' --json
-# Output: {"stdout":"hello\n","stderr":"","exitCode":0}
-```
-
-The CLI uses OverlayFS — reads come from the real filesystem, but all writes stay in memory and are discarded after execution.
-
-**Important**: The project root is mounted at `/home/user/project`. Use this path (or relative paths from the default cwd) to access your files inside the sandbox.
-
-Options:
-
-- `-c <script>` - Execute script from argument
-- `--root <path>` - Root directory (default: current directory)
-- `--cwd <path>` - Working directory in sandbox
-- `--allow-write` - Allow write operations (in memory only; read-only by default)
-- `-e, --errexit` - Exit on first error
-- `--json` - Output as JSON
-
-### Interactive Shell
-
-```bash
-pnpm shell
-```
-
-The interactive shell has network access disabled by default. Enable it with `--network`:
-
-```bash
-pnpm shell --network
-```
-
 ## Execution Protection
 
 Bash protects against infinite loops and deep recursion with configurable limits:
@@ -717,7 +551,7 @@ The Node.js package requires Node `>=20.19`.
 
 ## Browser Support
 
-The core shell (parsing, execution, filesystem, and all built-in commands) works in browser environments. The following features require Node.js and are unavailable in browsers: `python3`/`python`, `sqlite3`, `js-exec`, and `OverlayFs`/`ReadWriteFs` (which access the real filesystem).
+The core shell (parsing, execution, filesystem, and all built-in commands) works in browser environments. The following features require Node.js and are unavailable in browsers: `python3`/`python`, `sqlite3`, and `js-exec`.
 
 ## Default Layout
 

@@ -587,7 +587,7 @@ export class Bash {
     };
     this.commands.set(command.name, runtimeCommand);
     // Create command stubs in /bin and /usr/bin for PATH-based resolution
-    // Works for both InMemoryFs and OverlayFs (both have writeFileSync)
+    // Works for filesystems that have writeFileSync
     // Commands are registered to both locations like real Linux systems
     // (where /bin is often a symlink to /usr/bin on modern systems)
     const fs = this.fs as {

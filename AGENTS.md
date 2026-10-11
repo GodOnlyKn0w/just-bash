@@ -38,8 +38,6 @@ Input Script → Parser (src/parser/) → AST (src/ast/) → Interpreter (src/in
 | `src/commands/` | One directory per command, holding its implementation and its tests. Commands are registered in `registry.ts`. |
 | `src/commands/python3/` | CPython compiled to WebAssembly, running in a worker thread. |
 | `src/commands/js-exec/` | Sandboxed JavaScript and TypeScript runtime built on QuickJS. |
-| `src/fs/` | Virtual filesystem: `overlay-fs/`, `read-write-fs/`, `in-memory-fs/`, `mountable-fs/`, and the shared `real-fs-utils.ts` security helpers. |
+| `src/fs/` | Virtual filesystem: `in-memory-fs/` and `mountable-fs/`. |
 | `src/security/` | Defense-in-depth layers, execution limits, and the security test suite. |
 | `src/comparison-tests/`, `src/spec-tests/` | Cross-checking suites: recorded bash fixtures, and bash specification conformance with known failures. |
-
-CLI usage and the interactive shell are documented in [packages/just-bash/README.md](./packages/just-bash/README.md#cli).

@@ -154,22 +154,7 @@ function addImpliedImports(code: string): string {
   if (code.includes("defineCommand") && !code.includes('from "just-bash"')) {
     imports.push('import { defineCommand } from "just-bash";');
   }
-  if (code.includes("Sandbox") && !code.includes('from "just-bash"')) {
-    imports.push('import { Sandbox } from "just-bash";');
-  }
   // bash-tool imports are handled via ephemeral type definitions
-  if (
-    code.includes("OverlayFs") &&
-    !code.includes('from "just-bash/fs/overlay-fs"')
-  ) {
-    imports.push('import { OverlayFs } from "just-bash/fs/overlay-fs";');
-  }
-  if (
-    code.includes("ReadWriteFs") &&
-    !code.includes('from "just-bash/fs/read-write-fs"')
-  ) {
-    imports.push('import { ReadWriteFs } from "just-bash/fs/read-write-fs";');
-  }
   // ai imports are handled via ephemeral type definitions
 
   // Extract existing imports from code
@@ -260,16 +245,6 @@ export function generateText(options: {
         resolveJsonModule: true,
         paths: {
           "just-bash": [path.join(import.meta.dirname, "..", "src/index.ts")],
-          "just-bash/fs/overlay-fs": [
-            path.join(import.meta.dirname, "..", "src/fs/overlay-fs/index.ts"),
-          ],
-          "just-bash/fs/read-write-fs": [
-            path.join(
-              import.meta.dirname,
-              "..",
-              "src/fs/read-write-fs/index.ts",
-            ),
-          ],
           "bash-tool": [path.join(tmpDir, "bash-tool.d.ts")],
           ai: [path.join(tmpDir, "ai.d.ts")],
         },
