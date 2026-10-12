@@ -153,8 +153,6 @@ function addImpliedImports(code: string): string {
   if (code.includes("defineCommand") && !code.includes('from "just-bash"')) {
     imports.push('import { defineCommand } from "just-bash";');
   }
-  // bash-tool imports are handled via ephemeral type definitions
-  // ai imports are handled via ephemeral type definitions
 
   // Extract existing imports from code
   const existingImports = code.match(/^import .*/gm) || [];
@@ -208,28 +206,6 @@ function compileTypeScriptBlocks(
 
     if (files.length === 0) return;
 
-    // Create ephemeral type definitions for external packages
-    const bashToolTypes = `
-export interface CreateBashToolOptions {
-  files?: Record<string, string>;
-  cwd?: string;
-  env?: Record<string, string>;
-  network?: { allowedUrlPrefixes?: string[] };
-}
-export function createBashTool(options?: CreateBashToolOptions): any;
-`;
-    fs.writeFileSync(path.join(tmpDir, "bash-tool.d.ts"), bashToolTypes);
-
-    const aiTypes = `
-export function generateText(options: {
-  model: string;
-  tools?: Record<string, any>;
-  prompt: string;
-  maxSteps?: number;
-}): Promise<any>;
-`;
-    fs.writeFileSync(path.join(tmpDir, "ai.d.ts"), aiTypes);
-
     // Create a single tsconfig for type checking all files
     const tsconfig = {
       compilerOptions: {
@@ -244,8 +220,6 @@ export function generateText(options: {
         resolveJsonModule: true,
         paths: {
           "just-bash": [path.join(import.meta.dirname, "..", "src/index.ts")],
-          "bash-tool": [path.join(tmpDir, "bash-tool.d.ts")],
-          ai: [path.join(tmpDir, "ai.d.ts")],
         },
       },
       include: files,
@@ -491,8 +465,6 @@ describe("AGENTS.npm.md Bash examples", () => {
           'export { Bash } from "./Bash";\nexport type { BashOptions } from "./Bash";',
         "/data/node_modules/just-bash/dist/Bash.d.ts":
           "export interface BashOptions {\n  files?: Record<string, string>;\n  cwd?: string;\n  env?: Record<string, string>;\n}\nexport interface ExecResult {\n  stdout: string;\n  stderr: string;\n  exitCode: number;\n}\nexport class Bash {\n  constructor(options?: BashOptions);\n  exec(command: string): Promise<ExecResult>;\n}",
-        "/data/node_modules/just-bash/dist/ai/index.d.ts":
-          "export interface CreateBashToolOptions {\n  files?: Record<string, string>;\n  network?: { allowedUrlPrefixes: string[] };\n}\nexport function createBashTool(options?: CreateBashToolOptions): Tool;",
       },
       cwd: "/data",
     });

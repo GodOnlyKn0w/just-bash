@@ -2,8 +2,8 @@
  * Sandbox Escape Prevention Tests
  *
  * Tests to ensure the bash environment cannot escape the sandbox,
- * including filesystem escape, environment isolation, command execution
- * isolation, and network isolation.
+ * including filesystem escape, environment isolation, and command execution
+ * isolation.
  */
 
 import { beforeEach, describe, expect, it } from "vitest";

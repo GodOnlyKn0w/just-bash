@@ -14,9 +14,6 @@ const mockState = vi.hoisted(() => ({
   bridgeRunError: null as Error | null,
 }));
 
-// Pre-capture SharedArrayBuffer before defense-in-depth patches it
-const _SAB = vi.hoisted(() => globalThis.SharedArrayBuffer);
-
 vi.mock("node:worker_threads", () => {
   class MockWorker {
     private handlers = new Map<string, Array<(payload?: unknown) => void>>();
@@ -91,7 +88,7 @@ vi.mock("../worker-bridge/bridge-handler.js", () => {
 
 vi.mock("../worker-bridge/protocol.js", () => {
   return {
-    createSharedBuffer: () => new _SAB(4096),
+    createSharedBuffer: () => new SharedArrayBuffer(4096),
   };
 });
 

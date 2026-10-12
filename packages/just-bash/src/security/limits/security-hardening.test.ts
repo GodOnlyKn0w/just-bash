@@ -7,10 +7,8 @@
  * 3. Arithmetic variable indirection depth limits
  * 4. Configurable heredoc size limits
  * 5. Base conversion overflow clamping
- * 6. CLI shell default network off
  * 7. Case pattern tracking in command substitution (;& and ;;&)
  * 8. IFS character class escaping
- * 9. Defense-in-depth warning and isEnabled()
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
