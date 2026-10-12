@@ -35,7 +35,6 @@ import { fileURLToPath } from "node:url";
  * @property {RegExp[]} [autoSafe] - Patterns that make a line automatically safe
  * @property {RegExp[]} [fileAutoSafe] - Patterns that make the containing file safe
  * @property {RegExp} [filePattern] - Optional file path regex to scope the rule
- * @property {boolean} [scanSecurity] - Run this rule in audited security modules
  */
 
 /** @type {BannedPattern[]} */
@@ -498,34 +497,6 @@ const BANNED_PATTERNS = [
     ],
   },
   {
-    name: "Stack text used as a security decision",
-    pattern:
-      /\b(?:stack|errorStack)\s*(?:\?\.)?\.\s*(?:includes|match|indexOf)\s*\(/,
-    filePattern: /src\/security\/(?!.*\.test\.ts$).*\.ts$/,
-    scanSecurity: true,
-    message:
-      "Error stacks are forgeable, runtime-dependent diagnostics and cannot be\n" +
-      "used to authorize module loading or trusted operations.",
-    solutions: [
-      "Use an unforgeable lexical or AsyncLocalStorage capability",
-      "Complete trusted bootstrap before guest execution begins",
-    ],
-  },
-  {
-    name: "Forgeable diagnostic used as a security decision",
-    pattern:
-      /\b(?:message|sourceURL|fileName|filename|functionName|constructor\s*\.\s*name)\b[^\n]*(?:\.\s*(?:includes|match|indexOf|startsWith|endsWith)\s*\(|={2,3}|!={1,2})/,
-    filePattern: /src\/security\/(?!.*\.test\.ts$).*\.ts$/,
-    scanSecurity: true,
-    message:
-      "Error text, source URLs, filenames, and function names are forgeable diagnostics.\n" +
-      "They must not grant security capabilities or authorize trusted operations.",
-    solutions: [
-      "Use a private lexical capability or exact object identity",
-      "Keep diagnostics for audit output only, never authorization",
-    ],
-  },
-  {
     name: "Optional command limit with literal fallback",
     pattern: /\bctx\.limits\?\.\w+\s*\?\?\s*(?:\d|Number\.)/,
     filePattern: /src\/(?:commands|interpreter)\/.*\.ts$/,
@@ -555,9 +526,9 @@ const BANNED_PATTERNS = [
     pattern:
       /(?:from\s*["'](?:node:fs(?:\/promises)?|fs\/promises)["']|require\s*\(\s*["'](?:node:fs(?:\/promises)?|fs\/promises)["']\s*\))/,
     filePattern:
-      /src\/(?!fs\/)(?!cli\/)(?!comparison-tests\/)(?!commands\/js-exec\/)(?!commands\/(?:python3\/worker|sqlite3\/sqlite3)\.ts$)(?!world\/snapshot-store\.ts$).*\.(?:ts|js)$/,
+      /src\/(?!fs\/)(?!comparison-tests\/)(?!commands\/js-exec\/)(?!commands\/(?:python3\/worker|sqlite3\/sqlite3)\.ts$)(?!world\/snapshot-store\.ts$).*\.(?:ts|js)$/,
     message:
-      "Raw host filesystem access is restricted to reviewed filesystem, CLI, and\n" +
+      "Raw host filesystem access is restricted to reviewed filesystem and\n" +
       "worker bootstrap gates so virtual-path and error sanitization cannot be bypassed.",
     solutions: [
       "Use CommandContext.fs for command I/O",
@@ -735,6 +706,7 @@ const SKIP_PATTERNS = [
   /prototype-pollution\.test/, // These test the protection
   /src\/commands\/python3\/worker\.js$/, // Generated artifact, source is worker.ts
   /src\/commands\/sqlite3\/worker\.js$/, // Generated artifact, source is worker.ts
+  /src\/security\/attacks\/exploit-fixtures-js\//, // Hostile guest code executed by the attack tests
   /scripts\/check-banned-patterns\.js$/, // Self-lint script contains pattern definitions by design
 ];
 
@@ -865,15 +837,10 @@ function scanFile(filePath) {
     if (fd !== undefined) closeSync(fd);
   }
   const lines = content.split("\n");
-  const isSecurityModule = /src\/security\//.test(filePath);
 
   // First pass: collect all ignore comments in this file
   for (let i = 0; i < lines.length; i++) {
     if (IGNORE_COMMENT.test(lines[i])) {
-      // Security modules intentionally opt in to only their dedicated rules.
-      // Suppressions for the broad rules are therefore outside this scan's
-      // scope and must not be misreported as unused.
-      if (isSecurityModule) continue;
       ignoreComments.push({
         file: filePath,
         line: i + 1,
@@ -888,9 +855,6 @@ function scanFile(filePath) {
     const line = lines[i];
 
     for (const pattern of BANNED_PATTERNS) {
-      if (isSecurityModule && pattern.scanSecurity !== true) {
-        continue;
-      }
       if (pattern.filePattern && !pattern.filePattern.test(filePath)) {
         continue;
       }

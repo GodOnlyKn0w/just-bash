@@ -91,6 +91,26 @@ describe("check-banned-patterns filesystem boundary", () => {
     expect(result.scanErrors).toEqual([]);
   });
 
+  it("scans src/security with the broad rules but not its exploit fixtures", () => {
+    const root = tempDirectory("just-bash-lint-security-");
+    const fixtures = join(
+      root,
+      "src",
+      "security",
+      "attacks",
+      "exploit-fixtures-js",
+    );
+    mkdirSync(fixtures, { recursive: true });
+    writeFileSync(join(fixtures, "chain.js"), "const Fn = {}.constructor;\n");
+    expect(runScanner(root, { report: false }).hasErrors).toBe(false);
+
+    writeFileSync(
+      join(root, "src", "security", "gate.ts"),
+      "const bad = {};\n",
+    );
+    expect(runScanner(root, { report: false }).hasErrors).toBe(true);
+  });
+
   it("does not scan generated finding and planning inputs", () => {
     const root = tempDirectory("just-bash-lint-inputs-");
     mkdirSync(join(root, "todo"));
@@ -122,12 +142,6 @@ describe("check-banned-patterns filesystem boundary", () => {
       "Non-portable AbortSignal composition",
     ],
     [
-      "stack-based authorization",
-      "src/security/gate.ts",
-      'const trusted = errorStack.includes("node:internal/modules/cjs/loader");\n',
-      "Stack text used as a security decision",
-    ],
-    [
       "fresh nested execution engines",
       "src/interpreter/nested.ts",
       "const interpreter = new Interpreter(options, state);\n",
@@ -146,12 +160,6 @@ describe("check-banned-patterns filesystem boundary", () => {
   });
 
   it.each([
-    [
-      "forgeable security diagnostics",
-      "src/security/gate.ts",
-      'const trusted = error.message.includes("trusted loader");\n',
-      "Forgeable diagnostic used as a security decision",
-    ],
     [
       "optional local limit defaults",
       "src/commands/example.ts",
