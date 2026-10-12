@@ -4,7 +4,7 @@
  * object database, the index, and the working tree.
  */
 import type { RuntimeCommandContext } from "../../types.js";
-import type { WorktreeScan } from "./changes.js";
+import { type Change, detectRenames, type WorktreeScan } from "./changes.js";
 import { utf8 } from "./diff-output.js";
 import type { IndexEntry } from "./index-file.js";
 import {
@@ -15,6 +15,7 @@ import {
   type Repository,
   type TreeFile,
 } from "./repository.js";
+import { DEFAULT_TEXT_DIFF, type TextDiffOptions } from "./text-diff.js";
 
 /** A subcommand or an option that this git does not implement. */
 export class Unsupported extends Error {}
@@ -278,4 +279,62 @@ export function trackingLines(upstream: Tracking): string {
     return `Your branch is behind '${branch}' by ${behind} commit${plural(behind)}, and can be fast-forwarded.\n  (use "git pull" to update your local branch)\n`;
   }
   return `Your branch and '${branch}' have diverged,\nand have ${ahead} and ${behind} different commits each, respectively.\n  (use "git pull" if you want to integrate the remote branch with yours)\n`;
+}
+
+/** The two sides a diff compares, which decide the prefixes of diff.mnemonicPrefix. */
+export type DiffSides =
+  | "index-worktree"
+  | "commit-index"
+  | "commit-worktree"
+  | "commits";
+
+const MNEMONIC: Record<DiffSides, readonly [string, string]> = {
+  "index-worktree": ["i/", "w/"],
+  "commit-index": ["c/", "i/"],
+  "commit-worktree": ["c/", "w/"],
+  commits: ["a/", "b/"],
+};
+
+/** What the config says about diffs. */
+export interface DiffSettings {
+  readonly text: TextDiffOptions;
+  /** Whether a deleted and an added file with similar content are shown as one rename. */
+  readonly renames: boolean;
+  /** The prefixes of the old and the new path in a patch. */
+  prefixes(sides: DiffSides): readonly [string, string];
+}
+
+export async function diffSettings(
+  repository: Repository,
+): Promise<DiffSettings> {
+  const count = async (key: string, fallback: number) => {
+    const value = await repository.config(key);
+    return value === undefined ? fallback : Number(value);
+  };
+  const noPrefix = await repository.configFlag("diff.noprefix", false);
+  const mnemonic = await repository.configFlag("diff.mnemonicprefix", false);
+  const source = (await repository.config("diff.srcprefix")) ?? "a/";
+  const destination = (await repository.config("diff.dstprefix")) ?? "b/";
+  return {
+    text: {
+      context: await count("diff.context", DEFAULT_TEXT_DIFF.context),
+      interHunkContext: await count("diff.interhunkcontext", 0),
+      indentHeuristic: await repository.configFlag(
+        "diff.indentheuristic",
+        true,
+      ),
+    },
+    renames: await repository.configFlag("diff.renames", true),
+    prefixes: (sides) =>
+      noPrefix ? ["", ""] : mnemonic ? MNEMONIC[sides] : [source, destination],
+  };
+}
+
+/** The changes with renames detected when the settings ask for it. */
+export async function withRenames(
+  repository: Repository,
+  changes: Change[],
+  renames: boolean,
+): Promise<Change[]> {
+  return renames ? detectRenames(repository, changes) : changes;
 }

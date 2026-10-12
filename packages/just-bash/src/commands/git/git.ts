@@ -25,6 +25,7 @@ import {
   scanWorktree,
   type WorktreeScan,
 } from "./changes.js";
+import { unsupportedSetting } from "./config-rules.js";
 import {
   fileDiffs,
   nameOnly,
@@ -40,6 +41,7 @@ import type { IndexEntry } from "./index-file.js";
 import { comparePaths } from "./index-file.js";
 import {
   type Commit,
+  type ConfigOverride,
   formatDate,
   GitError,
   Repository,
@@ -49,6 +51,8 @@ import {
   abbreviate,
   branchLabel,
   checkoutFile,
+  type DiffSides,
+  diffSettings,
   entryOf,
   hasGlob,
   mediumFormat,
@@ -65,6 +69,7 @@ import {
   trackingLines,
   Unsupported,
   unsupportedOption,
+  withRenames,
 } from "./shared.js";
 import { TREE_COMMANDS } from "./tree-commands.js";
 import { IgnoreRules, untrackedFiles } from "./worktree.js";
@@ -88,9 +93,13 @@ async function readStatus(repository: Repository): Promise<Status> {
   const head = await repository.head();
   const entries = await repository.readIndex();
   const index = indexFiles(entries);
-  const staged = await detectRenames(
+  const staged = await withRenames(
     repository,
     compareFiles(await commitFiles(repository, head.oid), index),
+    await repository.configFlag(
+      "status.renames",
+      await repository.configFlag("diff.renames", true),
+    ),
   );
   const scan = await scanWorktree(repository, entries);
   const unstaged = compareFiles(index, scan.files);
@@ -218,9 +227,10 @@ async function shortStatus(
 }
 
 async function statusCommand(scope: Scope, args: string[]): Promise<Outcome> {
-  let short = false;
+  const { repository } = scope;
+  let short = await repository.configFlag("status.short", false);
   let porcelain = false;
-  let branch = false;
+  let branch = await repository.configFlag("status.branch", false);
   for (const arg of args) {
     if (arg === "--short") short = true;
     else if (arg === "--long") short = false;
@@ -233,12 +243,19 @@ async function statusCommand(scope: Scope, args: string[]): Promise<Outcome> {
     } else if (arg.startsWith("-")) throw unsupportedOption("status", arg);
     else throw new Unsupported(`git status: path argument '${arg}'`);
   }
-  const status = await readStatus(scope.repository);
+  const status = await readStatus(repository);
+  // status.relativePaths=false prints paths from the root of the working tree.
+  const placed: Scope = (await repository.configFlag(
+    "status.relativepaths",
+    true,
+  ))
+    ? scope
+    : { ...scope, prefix: "" };
   return {
     stdout:
       short || porcelain
-        ? await shortStatus(scope, status, branch, porcelain)
-        : await longStatus(scope, status),
+        ? await shortStatus(placed, status, branch, porcelain)
+        : await longStatus(placed, status),
   };
 }
 
@@ -470,6 +487,8 @@ async function commitCommand(scope: Scope, args: string[]): Promise<Outcome> {
     message,
   });
   await repository.setHead(oid);
+  const settings = await diffSettings(repository);
+  // The summary of a commit shows renames whatever diff.renames says.
   const changes = await detectRenames(
     repository,
     compareFiles(parentFiles, index),
@@ -481,7 +500,9 @@ async function commitCommand(scope: Scope, args: string[]): Promise<Outcome> {
     out += ` Author: ${utf8(author.name)} <${utf8(author.email)}>\n`;
   }
   if (amended !== undefined) out += ` Date: ${formatDate(author)}\n`;
-  out += shortStat(await fileDiffs(repository, changes)) + summary(changes);
+  out +=
+    shortStat(await fileDiffs(repository, changes, settings.text)) +
+    summary(changes);
   return { stdout: out };
 }
 
@@ -492,6 +513,7 @@ async function diffCommand(
   args: string[],
 ): Promise<Outcome> {
   let cached = false;
+  let quiet = false;
   let format: "patch" | "stat" | "name-only" | "name-status" = "patch";
   let formats = 0;
   const before: string[] = [];
@@ -501,6 +523,7 @@ async function diffCommand(
     if (separated) after.push(arg);
     else if (arg === "--") separated = true;
     else if (arg === "--cached" || arg === "--staged") cached = true;
+    else if (arg === "--quiet") quiet = true;
     else if (arg === "--stat") {
       format = "stat";
       formats++;
@@ -568,6 +591,7 @@ async function diffCommand(
   const prefixes = pathArguments.map((arg) => repositoryPath(scope, arg));
   let old: FileMap;
   let fresh: FileMap;
+  let sides: DiffSides = "commits";
   if (revisions.length === 2) {
     old = await commitFiles(repository, revisions[0]);
     fresh = await commitFiles(repository, revisions[1]);
@@ -580,7 +604,9 @@ async function diffCommand(
         revisions[0] ?? (await repository.head()).oid,
       );
       fresh = index;
+      sides = "commit-index";
     } else {
+      sides = revisions.length === 1 ? "commit-worktree" : "index-worktree";
       fresh = (await scanWorktree(repository, entries)).files;
       old =
         revisions.length === 1
@@ -588,14 +614,21 @@ async function diffCommand(
           : index;
     }
   }
-  const changes = await detectRenames(
+  const settings = await diffSettings(repository);
+  const changes = await withRenames(
     repository,
     compareFiles(old, fresh, prefixes),
+    settings.renames,
   );
+  // --quiet prints nothing and reports a difference by exit code 1.
+  if (quiet) return { stdout: "", exitCode: changes.length === 0 ? 0 : 1 };
   if (format === "name-only") return { stdout: nameOnly(changes) };
   if (format === "name-status") return { stdout: nameStatus(changes) };
-  const diffs = await fileDiffs(repository, changes);
-  return { stdout: format === "stat" ? stat(diffs) : patch(diffs) };
+  const diffs = await fileDiffs(repository, changes, settings.text);
+  return {
+    stdout:
+      format === "stat" ? stat(diffs) : patch(diffs, settings.prefixes(sides)),
+  };
 }
 
 // ---- Log ----
@@ -688,6 +721,8 @@ async function logCommand(scope: Scope, args: string[]): Promise<Outcome> {
     if (separated) pathArguments.push(arg);
     else if (arg === "--") separated = true;
     else if (arg === "--oneline") useFormat("%h %s", true);
+    // -q hides the diff, which this log never prints.
+    else if (arg === "-q" || arg === "--quiet") continue;
     else if (arg === "-n" || arg === "--max-count") {
       if (i + 1 >= args.length) {
         throw new GitError(`error: option \`${arg}' requires a value`, 129);
@@ -1047,6 +1082,7 @@ async function stashCommand(scope: Scope, args: string[]): Promise<Outcome> {
 async function initCommand(
   ctx: RuntimeCommandContext,
   args: string[],
+  overrides: readonly ConfigOverride[],
 ): Promise<Outcome> {
   if (args.length > 0) {
     throw args[0].startsWith("-")
@@ -1054,7 +1090,8 @@ async function initCommand(
       : new Unsupported(`git init: directory argument '${args[0]}'`);
   }
   const fs = ctx.fs;
-  const repository = Repository.at(fs, ctx.cwd, ctx.env);
+  const repository = Repository.at(fs, ctx.cwd, ctx.env, overrides);
+  assertConfig(await repository.configValues());
   const gitdir = repository.gitdir;
   const existed = await fs.exists(`${gitdir}/HEAD`);
   if (!existed) {
@@ -1102,36 +1139,175 @@ const SUBCOMMANDS = new Map<string, Subcommand>([
   ["stash", stashCommand],
 ]);
 
+/**
+ * The short options of each subcommand: `flags` take no value, `valued` take
+ * one. With `quiet`, `-q` and `--quiet` make a successful run print nothing.
+ */
+const OPTIONS = new Map<
+  string,
+  { flags: string; valued?: string; quiet?: boolean }
+>([
+  ["init", { flags: "q", quiet: true }],
+  ["add", { flags: "Au" }],
+  ["commit", { flags: "aq", valued: "m", quiet: true }],
+  ["status", { flags: "sb" }],
+  ["diff", { flags: "pu" }],
+  ["log", { flags: "q", valued: "n" }],
+  ["stash", { flags: "q", valued: "m", quiet: true }],
+  ["show", { flags: "qs" }],
+  ["branch", { flags: "dDlq", quiet: true }],
+  ["switch", { flags: "cq", quiet: true }],
+  ["checkout", { flags: "bq", quiet: true }],
+  ["restore", { flags: "SWq", quiet: true }],
+  ["reset", { flags: "q", quiet: true }],
+  ["rm", { flags: "rfq", quiet: true }],
+]);
+
+/**
+ * The arguments with each group of short options written apart: `-qam msg`
+ * becomes `-q -a -m msg`, and `-mmsg` becomes `-m msg`. A group with a
+ * letter outside flags and valued stays as it is, and so do the value of a
+ * valued option and everything after `--`.
+ */
+function splitShortOptions(
+  args: readonly string[],
+  flags: string,
+  valued: string,
+): string[] {
+  const result: string[] = [];
+  let verbatim = false;
+  let isValue = false;
+  for (const arg of args) {
+    if (verbatim || isValue || !/^-[A-Za-z]{2,}/.test(arg)) {
+      if (arg === "--" && !isValue) verbatim = true;
+      isValue =
+        !verbatim &&
+        !isValue &&
+        arg.length === 2 &&
+        arg.startsWith("-") &&
+        valued.includes(arg[1]);
+      result.push(arg);
+      continue;
+    }
+    const parts: string[] = [];
+    let known = true;
+    for (let i = 1; i < arg.length; i++) {
+      if (flags.includes(arg[i])) parts.push(`-${arg[i]}`);
+      else if (valued.includes(arg[i])) {
+        parts.push(`-${arg[i]}`);
+        if (i + 1 < arg.length) parts.push(arg.slice(i + 1));
+        else isValue = true;
+        break;
+      } else {
+        known = false;
+        break;
+      }
+    }
+    if (known) result.push(...parts);
+    else {
+      isValue = false;
+      result.push(arg);
+    }
+  }
+  return result;
+}
+
+/** Fails for a config setting that this git does not honour. */
+function assertConfig(values: ReadonlyMap<string, string>): void {
+  const setting = unsupportedSetting(values);
+  if (setting !== undefined) {
+    throw new Unsupported(`git: the config setting '${setting}'`);
+  }
+}
+
 async function run(
   args: string[],
   ctx: RuntimeCommandContext,
 ): Promise<Outcome> {
   let cwd = ctx.cwd;
   let first = 0;
+  const overrides: ConfigOverride[] = [];
   for (; first < args.length && args[first].startsWith("-"); first++) {
     if (args[first] === "--no-pager") continue;
     if (args[first] === "-C" && first + 1 < args.length) {
       cwd = ctx.fs.resolvePath(cwd, args[++first]);
       continue;
     }
+    if (args[first] === "-c" && first + 1 < args.length) {
+      const setting = args[++first];
+      const equals = setting.indexOf("=");
+      // A key without a value is a true flag.
+      overrides.push(
+        equals === -1
+          ? [setting, "true"]
+          : [setting.slice(0, equals), setting.slice(equals + 1)],
+      );
+      continue;
+    }
     throw new Unsupported(`git: option '${args[first]}'`);
   }
   const name = args[first];
   if (name === undefined) throw new Unsupported("git without a subcommand");
-  const rest = args.slice(first + 1);
+  const options = OPTIONS.get(name);
+  let rest = splitShortOptions(
+    args.slice(first + 1),
+    options?.flags ?? "",
+    options?.valued ?? "",
+  );
+  // Listing commands keep their output under -q; git has no quiet list.
+  const canBeQuiet =
+    options?.quiet === true &&
+    !(name === "stash" && rest[0] === "list") &&
+    !(
+      name === "branch" && !rest.some((arg) => /^(?:-d|-D|--delete)$/.test(arg))
+    );
+  let quiet = false;
+  if (canBeQuiet) {
+    const end = rest.indexOf("--");
+    const kept: string[] = [];
+    rest.forEach((arg, i) => {
+      const isValue =
+        i > 0 &&
+        rest[i - 1].length === 2 &&
+        rest[i - 1].startsWith("-") &&
+        (options?.valued ?? "").includes(rest[i - 1][1]);
+      if (
+        (arg === "-q" || arg === "--quiet") &&
+        !isValue &&
+        (end === -1 || i < end)
+      ) {
+        quiet = true;
+      } else {
+        kept.push(arg);
+      }
+    });
+    rest = kept;
+  }
+  const outcome = await dispatch(name, rest, ctx, cwd, overrides);
+  return quiet && (outcome.exitCode ?? 0) === 0 ? { exitCode: 0 } : outcome;
+}
+
+async function dispatch(
+  name: string,
+  rest: string[],
+  ctx: RuntimeCommandContext,
+  cwd: string,
+  overrides: readonly ConfigOverride[],
+): Promise<Outcome> {
   const scoped: RuntimeCommandContext = cwd === ctx.cwd ? ctx : { ...ctx, cwd };
-  if (name === "init") return initCommand(scoped, rest);
+  if (name === "init") return initCommand(scoped, rest, overrides);
   const subcommand = SUBCOMMANDS.get(name) ?? TREE_COMMANDS.get(name);
   if (name !== "diff" && subcommand === undefined) {
     throw new Unsupported(`git ${name}`);
   }
-  const repository = await Repository.find(ctx.fs, cwd, ctx.env);
+  const repository = await Repository.find(ctx.fs, cwd, ctx.env, overrides);
   if (repository === undefined) {
     if (name === "diff") return diffCommand(undefined, rest);
     throw new GitError(
       "fatal: not a git repository (or any of the parent directories): .git",
     );
   }
+  assertConfig(await repository.configValues());
   const scope: Scope = {
     repository,
     prefix:

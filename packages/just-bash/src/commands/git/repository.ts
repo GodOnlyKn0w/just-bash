@@ -175,6 +175,26 @@ function parseConfig(text: string): Map<string, string> {
   return values;
 }
 
+/** A config key in the form of the keys of parseConfig: section and variable in lower case, the subsection as written. */
+function configKey(key: string): string {
+  const first = key.indexOf(".");
+  const last = key.lastIndexOf(".");
+  if (first === -1) return key.toLowerCase();
+  return (
+    key.slice(0, first).toLowerCase() +
+    key.slice(first, last) +
+    key.slice(last).toLowerCase()
+  );
+}
+
+/** Whether a config value is one of git's spellings of true. */
+export function isTrue(value: string): boolean {
+  return /^(?:true|yes|on|1)$/i.test(value);
+}
+
+/** A `-c <key>=<value>` option of the command line. */
+export type ConfigOverride = readonly [key: string, value: string];
+
 const ZONE = /^[+-]\d{4}$/;
 
 /**
@@ -268,13 +288,21 @@ export class Repository {
   private readonly client: PromiseFsClient;
   private readonly cache: object = Object.create(null);
   private readonly trees = new Map<string, Map<string, TreeFile>>();
-  private configValues: Map<string, string> | undefined;
+  private values: Map<string, string> | undefined;
 
-  private constructor(fs: IFileSystem, root: string, env: Map<string, string>) {
+  private readonly overrides: readonly ConfigOverride[];
+
+  private constructor(
+    fs: IFileSystem,
+    root: string,
+    env: Map<string, string>,
+    overrides: readonly ConfigOverride[],
+  ) {
     this.fs = fs;
     this.root = root;
     this.gitdir = root === "/" ? "/.git" : `${root}/.git`;
     this.env = env;
+    this.overrides = overrides;
     this.client = isomorphicFs(fs);
   }
 
@@ -283,9 +311,10 @@ export class Repository {
     fs: IFileSystem,
     directory: string,
     env: Map<string, string>,
+    overrides: readonly ConfigOverride[] = [],
   ): Promise<Repository | undefined> {
     for (let current = directory; ; current = parentDirectory(current)) {
-      const repository = new Repository(fs, current, env);
+      const repository = new Repository(fs, current, env, overrides);
       if (await repository.exists("HEAD")) return repository;
       if (current === "/") return undefined;
     }
@@ -296,8 +325,9 @@ export class Repository {
     fs: IFileSystem,
     directory: string,
     env: Map<string, string>,
+    overrides: readonly ConfigOverride[] = [],
   ): Repository {
-    return new Repository(fs, directory, env);
+    return new Repository(fs, directory, env, overrides);
   }
 
   private path(name: string): string {
@@ -330,39 +360,104 @@ export class Repository {
 
   // ---- Configuration and identity ----
 
-  /** A config value: the repository's `.git/config`, else `$HOME/.gitconfig`. */
-  async config(key: string): Promise<string | undefined> {
-    if (this.configValues === undefined) {
-      const values = new Map<string, string>();
-      const home = this.env.get("HOME");
-      const sources = [
-        home === undefined
-          ? undefined
-          : `${home === "/" ? "" : home}/.gitconfig`,
-        this.path("config"),
-      ];
-      for (const source of sources) {
-        if (source === undefined) continue;
-        try {
-          const text = textDecoder.decode(await this.fs.readFileBuffer(source));
-          for (const [name, value] of parseConfig(text)) {
-            values.set(name, value);
-          }
-        } catch (error) {
-          if (!isMissing(error) && errorCode(error) !== "EISDIR") throw error;
-        }
+  /** A path below `$HOME`; undefined without HOME. */
+  private homePath(name: string): string | undefined {
+    const home = this.env.get("HOME");
+    return home === undefined
+      ? undefined
+      : `${home === "/" ? "" : home}/${name}`;
+  }
+
+  /** The directory of the per-user git files: `$XDG_CONFIG_HOME/git`, else `$HOME/.config/git`. */
+  private userDirectory(): string | undefined {
+    const xdg = this.env.get("XDG_CONFIG_HOME");
+    return xdg ? `${xdg}/git` : this.homePath(".config/git");
+  }
+
+  /**
+   * All config values by key ("section.key" or "section.subsection.key",
+   * section and key in lower case), the last source winning. The sources in
+   * git's order: `/etc/gitconfig` unless GIT_CONFIG_NOSYSTEM is set; the
+   * file GIT_CONFIG_GLOBAL names, else the per-user `git/config` and
+   * `$HOME/.gitconfig`; the repository's `.git/config`; the variables
+   * GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, and GIT_CONFIG_VALUE_<n>; the `-c`
+   * options of the command line.
+   */
+  async configValues(): Promise<ReadonlyMap<string, string>> {
+    if (this.values !== undefined) return this.values;
+    const values = new Map<string, string>();
+    const global = this.env.get("GIT_CONFIG_GLOBAL");
+    const noSystem = this.env.get("GIT_CONFIG_NOSYSTEM");
+    const sources = [
+      noSystem !== undefined && isTrue(noSystem) ? undefined : "/etc/gitconfig",
+      ...(global !== undefined
+        ? [global]
+        : [
+            this.userDirectory() === undefined
+              ? undefined
+              : `${this.userDirectory()}/config`,
+            this.homePath(".gitconfig"),
+          ]),
+      this.path("config"),
+    ];
+    for (const source of sources) {
+      if (source === undefined || source === "") continue;
+      try {
+        const text = textDecoder.decode(await this.fs.readFileBuffer(source));
+        for (const [name, value] of parseConfig(text)) values.set(name, value);
+      } catch (error) {
+        if (!isMissing(error) && errorCode(error) !== "EISDIR") throw error;
       }
-      this.configValues = values;
     }
-    return this.configValues.get(key);
+    const count = Number(this.env.get("GIT_CONFIG_COUNT") ?? "0");
+    for (let i = 0; Number.isSafeInteger(count) && i < count; i++) {
+      const key = this.env.get(`GIT_CONFIG_KEY_${i}`);
+      if (key !== undefined) {
+        values.set(configKey(key), this.env.get(`GIT_CONFIG_VALUE_${i}`) ?? "");
+      }
+    }
+    for (const [key, value] of this.overrides)
+      values.set(configKey(key), value);
+    this.values = values;
+    return values;
+  }
+
+  /** One config value; the key as in configValues. */
+  async config(key: string): Promise<string | undefined> {
+    return (await this.configValues()).get(key);
+  }
+
+  /** A boolean config value; fallback when the key is not set. */
+  async configFlag(key: string, fallback: boolean): Promise<boolean> {
+    const value = await this.config(key);
+    return value === undefined ? fallback : isTrue(value);
+  }
+
+  /** The files of ignore rules outside the working tree: the file core.excludesFile names, else the per-user `git/ignore`; then `.git/info/exclude`. */
+  async excludeFiles(): Promise<string[]> {
+    const configured = await this.config("core.excludesfile");
+    const user =
+      configured === undefined
+        ? this.userDirectory() === undefined
+          ? undefined
+          : `${this.userDirectory()}/ignore`
+        : configured.startsWith("~/")
+          ? this.homePath(configured.slice(2))
+          : configured;
+    return [...(user === undefined ? [] : [user]), this.path("info/exclude")];
   }
 
   /** The author or the committer of a commit made now; fails with exit code 128 without a name and an email. */
   async identity(role: "AUTHOR" | "COMMITTER"): Promise<Identity> {
+    const section = role === "AUTHOR" ? "author" : "committer";
     const name =
-      this.env.get(`GIT_${role}_NAME`) ?? (await this.config("user.name"));
+      this.env.get(`GIT_${role}_NAME`) ??
+      (await this.config(`${section}.name`)) ??
+      (await this.config("user.name"));
     const email =
-      this.env.get(`GIT_${role}_EMAIL`) ?? (await this.config("user.email"));
+      this.env.get(`GIT_${role}_EMAIL`) ??
+      (await this.config(`${section}.email`)) ??
+      (await this.config("user.email"));
     if (!name || email === undefined) {
       throw new GitError(
         `${role === "AUTHOR" ? "Author" : "Committer"} identity unknown\n\n*** Please tell me who you are.\n\nRun\n\n  git config --global user.email "you@example.com"\n  git config --global user.name "Your Name"\n\nto set your account's default identity.\nOmit --global to set the identity only in this repository.\n\nfatal: no ${name ? "email" : "name"} was given and auto-detection is disabled`,

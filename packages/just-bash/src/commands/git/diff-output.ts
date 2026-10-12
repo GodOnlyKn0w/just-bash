@@ -8,7 +8,13 @@
 import { encodeUtf8ToBytes, latin1FromBytes } from "../../encoding.js";
 import { type Change, sideContent } from "./changes.js";
 import type { Repository } from "./repository.js";
-import { byteString, diffText, isBinary } from "./text-diff.js";
+import {
+  byteString,
+  DEFAULT_TEXT_DIFF,
+  diffText,
+  isBinary,
+  type TextDiffOptions,
+} from "./text-diff.js";
 
 /** The UTF-8 bytes of text. */
 export function utf8(text: string): string {
@@ -71,15 +77,20 @@ export interface FileDiff {
 export async function fileDiffs(
   repository: Repository,
   changes: readonly Change[],
+  options: TextDiffOptions = DEFAULT_TEXT_DIFF,
 ): Promise<FileDiff[]> {
   const diffs: FileDiff[] = [];
   for (const change of changes) {
     if (change.status === "T") {
       diffs.push(
-        ...(await fileDiffs(repository, [
-          { status: "D", path: change.path, before: change.before },
-          { status: "A", path: change.path, after: change.after },
-        ])),
+        ...(await fileDiffs(
+          repository,
+          [
+            { status: "D", path: change.path, before: change.before },
+            { status: "A", path: change.path, after: change.after },
+          ],
+          options,
+        )),
       );
       continue;
     }
@@ -99,7 +110,7 @@ export async function fileDiffs(
     const text =
       binary || sameContent
         ? { text: "", insertions: 0, deletions: 0 }
-        : diffText(byteString(before), byteString(after));
+        : diffText(byteString(before), byteString(after), options);
     diffs.push({
       change,
       binary,
@@ -120,13 +131,16 @@ function octal(mode: number): string {
 
 const ABBREVIATION = 7;
 
-/** The patch of the diffs: for each one the `diff --git` header and the hunks. */
-export function patch(diffs: readonly FileDiff[]): string {
+/** The patch of the diffs: for each one the `diff --git` header and the hunks. The two prefixes go before the old and the new path. */
+export function patch(
+  diffs: readonly FileDiff[],
+  prefixes: readonly [string, string] = ["a/", "b/"],
+): string {
   let out = "";
   for (const diff of diffs) {
     const { change } = diff;
-    const oldName = quotePath(`a/${change.oldPath ?? change.path}`);
-    const newName = quotePath(`b/${change.path}`);
+    const oldName = quotePath(`${prefixes[0]}${change.oldPath ?? change.path}`);
+    const newName = quotePath(`${prefixes[1]}${change.path}`);
     out += `diff --git ${oldName} ${newName}\n`;
     const { before, after } = change;
     if (before === undefined && after !== undefined) {

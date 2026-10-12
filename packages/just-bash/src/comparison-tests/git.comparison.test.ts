@@ -286,6 +286,44 @@ describe("git command - Real Bash Comparison", () => {
       "show of <commit>:<path> for a file and for a directory",
       `${CHANGED}; git add -A; git commit -m second >/dev/null; git show HEAD:a.txt; git show HEAD~1:a.txt; git show HEAD:sub; git show HEAD:; git show HEAD~1:sub/y.txt HEAD:new.txt; git show HEAD:nosuch 2>/dev/null; echo $?`,
     ],
+    // short options written together, and -q
+    [
+      "commit -qm, -qam, and -am",
+      `git init -q; git commit -qm none; echo $?; git add .; git commit -qm first; echo $?; git log --format='%H %s'; git commit -qm again; echo $?; echo more >> a.txt; git commit -qam second; echo more >> a.txt; git commit -am third; git commit -mfourth --amend; git log --oneline`,
+    ],
+    [
+      "-q on init, stash, switch, checkout, reset, rm, branch, and restore",
+      `git init -q; test -d .git && echo made; git add .; git commit -qm first; echo more >> a.txt; git stash -q; git stash list; git stash pop -q; git stash push -qm named; git stash list; git stash drop -q; git stash list; echo more >> a.txt; git switch -qc feature; git switch -q master; git checkout -q feature; git checkout -qb other; git branch -q; git reset -q --hard; git status -s; echo more >> a.txt; git add a.txt; git reset -q; git status -s; git rm -q sub/y.txt; git status -s; git branch -qD feature; git branch; git restore -q a.txt; git status -s`,
+    ],
+    [
+      "diff --quiet, log -q, and show without a patch",
+      `${COMMITTED}; git diff --quiet; echo $?; echo more >> a.txt; git diff --quiet; echo $?; git diff --quiet -- sub; echo $?; git diff --cached --quiet; echo $?; git log -q --oneline; git show -q; git show -s; git show --no-patch; git show -s --stat`,
+    ],
+    [
+      "status -sb, rm -rf, and log -n2 written together",
+      `${CHANGED}; git status -sb; git status -bs; git rm -rfq sub; git status -sb; git commit -qam second; git log -n2 --oneline`,
+    ],
+    // config
+    [
+      "diff prefixes from the config and from -c",
+      `${CHANGED}; git add a.txt; echo five >> a.txt; git -c diff.mnemonicPrefix=true diff -- a.txt; git -c diff.mnemonicPrefix=true diff --cached; git -c diff.mnemonicPrefix=true diff HEAD -- a.txt; git commit -qm second; git -c diff.mnemonicPrefix=true diff HEAD~1 HEAD; git -c diff.mnemonicPrefix=true show; git -c diff.noprefix=true diff; git -c diff.srcPrefix=x/ -c diff.dstPrefix=y/ diff; git -c diff.mnemonicPrefix=true -c diff.noprefix=true diff; printf '[diff]\\n\\tmnemonicPrefix = true\\n' >> .git/config; git diff`,
+    ],
+    [
+      "diff.context, diff.interHunkContext, and diff.indentHeuristic",
+      "git init -q; seq 1 30 > n.txt; printf 'if a\\n  x\\nend\\n\\nif b\\n  y\\nend\\n' > blocks.txt; git add .; git commit -qm base; sed -i 's/^5$/five/; s/^12$/twelve/' n.txt; printf 'if a\\n  x\\nend\\n\\nif c\\n  z\\nend\\n\\nif b\\n  y\\nend\\n' > blocks.txt; git -c diff.context=1 diff; git -c diff.context=1 -c diff.interHunkContext=5 diff -- n.txt; git -c diff.context=0 diff -- n.txt; git -c diff.indentHeuristic=false diff -- blocks.txt; git diff -- blocks.txt",
+    ],
+    [
+      "diff.renames and status.renames",
+      `${COMMITTED}; git mv a.txt b.txt; git -c diff.renames=false status -s; git -c diff.renames=false diff --cached --name-status; git -c status.renames=false status; git -c diff.renames=false -c status.renames=true status -s; git -c diff.renames=false commit -m moved; git -c diff.renames=false show --stat`,
+    ],
+    [
+      "status.short, status.branch, and status.relativePaths",
+      `${CHANGED}; git -c status.short=true status; git -c status.short=true -c status.branch=true status; git -c status.short=true status --long | head -3; cd sub; git -c status.relativePaths=false status -s; git -c status.relativePaths=false status`,
+    ],
+    [
+      "config from $HOME/.gitconfig, the per-user directory, GIT_CONFIG_GLOBAL, and GIT_CONFIG_COUNT",
+      `unset GIT_CONFIG_GLOBAL GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL; export HOME=$PWD/home XDG_CONFIG_HOME=$PWD/xdg; mkdir -p home xdg/git; printf '[user]\\n\\tname = Home Name\\n\\temail = home@example.com\\n[core]\\n\\texcludesFile = ~/ignore\\n[init]\\n\\tdefaultBranch = trunk\\n' > home/.gitconfig; printf 'home\\nxdg\\n*.skip\\n' > home/ignore; printf '[status]\\n\\tshort = true\\n[author]\\n\\tname = Author Name\\n' > xdg/git/config; echo s > f.skip; git init -q; git status; git add .; git commit -qm first; git log --format='%an %ae %cn %ce'; git status --long | head -1; echo more >> a.txt; GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=diff.noprefix GIT_CONFIG_VALUE_0=true git diff | head -3; printf '[status]\\n\\tshort = false\\n' > other.cfg; GIT_CONFIG_GLOBAL=$PWD/other.cfg git -c user.name=Cli -c user.email=cli@example.com status | head -2`,
+    ],
     // outside a repository
     [
       "status, log, and add outside a repository",

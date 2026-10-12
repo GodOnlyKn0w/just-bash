@@ -8,7 +8,6 @@ import {
   type Change,
   commitFiles,
   compareFiles,
-  detectRenames,
   type FileMap,
   indexFiles,
   matchesPaths,
@@ -20,6 +19,7 @@ import { GitError, type Repository, type TreeFile } from "./repository.js";
 import {
   abbreviate,
   checkoutFile,
+  diffSettings,
   entryOf,
   hasGlob,
   mediumFormat,
@@ -34,6 +34,7 @@ import {
   trackingLines,
   Unsupported,
   unsupportedOption,
+  withRenames,
 } from "./shared.js";
 import { byteString } from "./text-diff.js";
 
@@ -216,6 +217,8 @@ async function branchCommand(scope: Scope, args: string[]): Promise<Outcome> {
     if (arg === "-d" || arg === "--delete") remove = "merged";
     else if (arg === "-D") remove = "force";
     else if (arg === "--list" || arg === "-l") continue;
+    // Listing and creating print the same with -q.
+    else if (arg === "-q" || arg === "--quiet") continue;
     else if (arg.startsWith("-")) throw unsupportedOption("branch", arg);
     else names.push(arg);
   }
@@ -809,10 +812,13 @@ async function showPath(
 async function showCommand(scope: Scope, args: string[]): Promise<Outcome> {
   const { repository } = scope;
   let statFormat = false;
+  let noPatch = false;
   const objects: string[] = [];
   for (const arg of args) {
     if (arg === "--stat") statFormat = true;
-    else if (arg.startsWith("-")) throw unsupportedOption("show", arg);
+    else if (arg === "-s" || arg === "-q" || arg === "--no-patch") {
+      noPatch = true;
+    } else if (arg.startsWith("-")) throw unsupportedOption("show", arg);
     else objects.push(arg);
   }
   if (objects.length === 0) objects.push("HEAD");
@@ -829,18 +835,25 @@ async function showCommand(scope: Scope, args: string[]): Promise<Outcome> {
     const commit = await repository.readCommit(
       await repository.resolveCommit(object),
     );
-    out += `${mediumFormat(commit)}\n`;
+    out += mediumFormat(commit);
+    // --stat takes effect also after -s.
+    if (noPatch && !statFormat) continue;
+    out += "\n";
     // A merge shows no patch; its diffstat is the one against its first parent.
     if (commit.parents.length > 1 && !statFormat) continue;
-    const changes = await detectRenames(
+    const settings = await diffSettings(repository);
+    const changes = await withRenames(
       repository,
       compareFiles(
         await commitFiles(repository, commit.parents[0]),
         await repository.treeFiles(commit.tree),
       ),
+      settings.renames,
     );
-    const diffs = await fileDiffs(repository, changes);
-    out += statFormat ? stat(diffs) : patch(diffs);
+    const diffs = await fileDiffs(repository, changes, settings.text);
+    out += statFormat
+      ? stat(diffs)
+      : patch(diffs, settings.prefixes("commits"));
   }
   return { stdout: out };
 }

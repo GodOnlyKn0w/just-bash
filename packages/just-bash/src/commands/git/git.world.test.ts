@@ -92,6 +92,25 @@ describe("git in the virtual world", () => {
     expect(changedBy(commit)).toContain("/work/.git/refs/heads/master");
   });
 
+  it("fails every subcommand for a config file setting it does not honour, and runs again without it", async () => {
+    const { backend, run } = await world({ f: "content\n" });
+    await run(`${IDENTITY}; git init -q && git add f && git commit -qm x`);
+    await run("printf '[diff]\\n\\talgorithm = histogram\\n' >> .git/config");
+    const version = await backend.versions?.current();
+    for (const command of ["git status", "git diff", "git log", "git add f"]) {
+      const { exit, output } = await run(command);
+      expect(exit).toEqual({ code: 129 });
+      expect(output).toBe(
+        "git: the config setting 'diff.algorithm=histogram' is not supported in this environment\n",
+      );
+    }
+    expect(await backend.versions?.current()).toBe(version);
+    await run(
+      "printf '[core]\\n\\tbare = false\\n[diff]\\n\\talgorithm = myers\\n[alias]\\n\\tst = status\\n' > .git/config",
+    );
+    expect((await run("git status --short")).exit).toEqual({ code: 0 });
+  });
+
   it.each([
     ["git push", "git push"],
     ["git rebase", "git rebase"],
@@ -101,6 +120,10 @@ describe("git in the virtual world", () => {
     ["git stash -u", "'-u'"],
     ["git diff --word-diff", "'--word-diff'"],
     ["git add -p", "'-p'"],
+    ["git -c diff.algorithm=histogram diff", "'diff.algorithm=histogram'"],
+    ["git -c color.ui=always status", "'color.ui=always'"],
+    ["git -c core.autocrlf=true add f", "'core.autocrlf=true'"],
+    ["git commit -qxm message", "'-qxm'"],
   ])("fails %s with exit code 129 and leaves the world unchanged", async (command, named) => {
     const { backend, changes, run } = await world({ f: "content\n" });
     await run(

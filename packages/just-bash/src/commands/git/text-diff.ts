@@ -8,7 +8,21 @@
  */
 import { diffArrays } from "diff";
 
-const CONTEXT = 3;
+/** How diffText places changes and cuts hunks; the defaults are git's. */
+export interface TextDiffOptions {
+  /** Unchanged lines around each change. */
+  readonly context: number;
+  /** Unchanged lines between two hunks, beyond the context, that still join them. */
+  readonly interHunkContext: number;
+  /** Whether a change that can move is placed by the indentation of the lines around it; else it stays as far down as it goes. */
+  readonly indentHeuristic: boolean;
+}
+
+export const DEFAULT_TEXT_DIFF: TextDiffOptions = {
+  context: 3,
+  interHunkContext: 0,
+  indentHeuristic: true,
+};
 const BINARY_PROBE_BYTES = 8000;
 
 /** Whether git treats content as binary: a NUL byte in its first 8000 bytes. */
@@ -189,7 +203,7 @@ function compareScores(a: Score, b: Score): number {
   return 60 * indents + (a.penalty - b.penalty);
 }
 
-function compact(side: Side, other: Side): void {
+function compact(side: Side, other: Side, indentHeuristic: boolean): void {
   const group = firstGroup(side);
   const otherGroup = firstGroup(other);
   for (;;) {
@@ -215,7 +229,7 @@ function compact(side: Side, other: Side): void {
             slideUp(side, group);
             previousGroup(other, otherGroup);
           }
-        } else {
+        } else if (indentHeuristic) {
           let shift = Math.max(
             earliestEnd,
             group.end - size - 1,
@@ -282,7 +296,12 @@ function range(start: number, count: number): string {
 }
 
 /** The difference of two texts, each a string with one character for each byte. */
-export function diffText(before: string, after: string): TextDiff {
+export function diffText(
+  before: string,
+  after: string,
+  options: TextDiffOptions = DEFAULT_TEXT_DIFF,
+): TextDiff {
+  const { context } = options;
   const oldLines = splitLines(before);
   const newLines = splitLines(after);
   const old: Side = {
@@ -305,8 +324,8 @@ export function diffText(before: string, after: string): TextDiff {
       j += part.value.length;
     }
   }
-  compact(old, fresh);
-  compact(fresh, old);
+  compact(old, fresh, options.indentHeuristic);
+  compact(fresh, old, options.indentHeuristic);
 
   // Blocks of changed lines: [oldStart, oldEnd) replaced by [newStart, newEnd).
   const blocks: [number, number, number, number][] = [];
@@ -334,14 +353,15 @@ export function diffText(before: string, after: string): TextDiff {
     let last = first;
     while (
       last + 1 < blocks.length &&
-      blocks[last + 1][0] - blocks[last][1] <= 2 * CONTEXT
+      blocks[last + 1][0] - blocks[last][1] <=
+        2 * context + options.interHunkContext
     ) {
       last++;
     }
-    const oldStart = Math.max(blocks[first][0] - CONTEXT, 0);
-    const oldEnd = Math.min(blocks[last][1] + CONTEXT, oldLines.length);
-    const newStart = Math.max(blocks[first][2] - CONTEXT, 0);
-    const newEnd = Math.min(blocks[last][3] + CONTEXT, newLines.length);
+    const oldStart = Math.max(blocks[first][0] - context, 0);
+    const oldEnd = Math.min(blocks[last][1] + context, oldLines.length);
+    const newStart = Math.max(blocks[first][2] - context, 0);
+    const newEnd = Math.min(blocks[last][3] + context, newLines.length);
     for (let line = oldStart - 1; line > searched; line--) {
       const name = functionLine(oldLines[line]);
       if (name !== undefined) {

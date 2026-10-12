@@ -99,7 +99,7 @@ export class IgnoreRules {
     }
   }
 
-  /** The rules of the `.gitignore` in directory; for the root, preceded by those of `.git/info/exclude`. */
+  /** The rules of the `.gitignore` in directory; for the root, preceded by those of the repository's exclude files. */
   private rules(directory: string): Promise<Rule[]> {
     let rules = this.byDirectory.get(directory);
     if (rules === undefined) {
@@ -108,10 +108,12 @@ export class IgnoreRules {
       );
       rules =
         directory === ""
-          ? Promise.all([
-              this.read(`${this.repository.gitdir}/info/exclude`),
-              this.read(file),
-            ]).then(([exclude, own]) => [...exclude, ...own])
+          ? this.repository
+              .excludeFiles()
+              .then((files) =>
+                Promise.all([...files, file].map((path) => this.read(path))),
+              )
+              .then((lists) => lists.flat())
           : this.read(file);
       this.byDirectory.set(directory, rules);
     }
