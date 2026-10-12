@@ -38,14 +38,34 @@ function readTree(store: SnapshotStore, id: string): TreeRow[] | undefined {
     : (JSON.parse(textDecoder.decode(bytes)) as TreeRow[]);
 }
 
+/** A version object: the root directory's permission bits and its tree id. */
+type VersionRecord = [rootMode: number, rootTree: string];
+
+function readVersion(
+  store: SnapshotStore,
+  version: string,
+): VersionRecord | undefined {
+  const bytes = store.get("version", version);
+  return bytes === undefined
+    ? undefined
+    : (JSON.parse(textDecoder.decode(bytes)) as VersionRecord);
+}
+
+/** The permission bits of a mode. */
+function permissions(mode: number): number {
+  return mode & 0o7777;
+}
+
 /**
  * The state of a world: an InMemoryFs whose every entry change is mirrored
  * here, so the world version can be recomputed by visiting only the
  * directories on the paths that changed.
  *
- * A directory's tree object lists its children sorted by name; a world
- * version is the id of the root tree. Modification times are not part of the
- * state: the same files, directories, links, and modes give the same version.
+ * A directory's tree object lists its children sorted by name with their
+ * kind, permission bits, and content version, tree id, or link target; a
+ * world version is the id of the record of the root's permission bits and
+ * tree id. So the same entries at the same paths give the same version, and
+ * modification times do not count.
  */
 export class WorldState {
   readonly fs: InMemoryFs;
@@ -165,11 +185,16 @@ export class WorldState {
       const path = childPath(directory, name);
       const entry = this.entries.get(path) as FsEntry;
       if (entry.type === "directory") {
-        rows.push([name, "d", entry.mode, this.treeId(path)]);
+        rows.push([name, "d", permissions(entry.mode), this.treeId(path)]);
       } else if (entry.type === "symlink") {
-        rows.push([name, "l", entry.mode, entry.target]);
+        rows.push([name, "l", permissions(entry.mode), entry.target]);
       } else {
-        rows.push([name, "f", entry.mode, this.fileVersion(entry)]);
+        rows.push([
+          name,
+          "f",
+          permissions(entry.mode),
+          this.fileVersion(entry),
+        ]);
       }
     }
     const bytes = textEncoder.encode(JSON.stringify(rows));
@@ -181,8 +206,11 @@ export class WorldState {
 
   /** Saves the current state to the store and returns its world version. */
   save(): string {
-    const version = this.treeId("/");
-    this.store.addVersion(version);
+    const root = this.entries.get("/") as FsEntry;
+    const record: VersionRecord = [permissions(root.mode), this.treeId("/")];
+    const bytes = textEncoder.encode(JSON.stringify(record));
+    const version = contentVersion(bytes);
+    this.store.put("version", version, bytes);
     return version;
   }
 
@@ -201,8 +229,10 @@ export class WorldState {
         "ENOENT",
         `ENOENT: world version ${version} is not in the snapshot store`,
       );
-    if (!store.hasVersion(version)) throw missing();
+    const record = readVersion(store, version);
+    if (record === undefined) throw missing();
     const state = new WorldState(store, maxTotalBytes);
+    await state.fs.chmod("/", record[0]);
     const trees = new Map<string, string>();
     const visit = async (directory: string, id: string): Promise<void> => {
       const rows = readTree(store, id);
@@ -224,7 +254,7 @@ export class WorldState {
         }
       }
     };
-    await visit("/", version);
+    await visit("/", record[1]);
     for (const [directory, id] of trees) state.trees.set(directory, id);
     return state;
   }
@@ -235,25 +265,28 @@ export function versionEntries(
   store: SnapshotStore,
   version: string,
 ): WorldVersionEntry[] | undefined {
-  if (!store.hasVersion(version)) return undefined;
-  const entries: WorldVersionEntry[] = [{ path: "/", kind: "directory" }];
+  const record = readVersion(store, version);
+  if (record === undefined) return undefined;
+  const entries: WorldVersionEntry[] = [
+    { path: "/", kind: "directory", mode: record[0] },
+  ];
   const visit = (directory: string, id: string): boolean => {
     const rows = readTree(store, id);
     if (rows === undefined) return false;
-    for (const [name, kind, , ref] of rows) {
+    for (const [name, kind, mode, ref] of rows) {
       const path = childPath(directory, name);
       if (kind === "d") {
-        entries.push({ path, kind: "directory" });
+        entries.push({ path, kind: "directory", mode });
         if (!visit(path, ref)) return false;
       } else if (kind === "l") {
-        entries.push({ path, kind: "symlink", target: ref });
+        entries.push({ path, kind: "symlink", mode, target: ref });
       } else {
-        entries.push({ path, kind: "file", version: ref });
+        entries.push({ path, kind: "file", mode, version: ref });
       }
     }
     return true;
   };
-  if (!visit("/", version)) return undefined;
+  if (!visit("/", record[1])) return undefined;
   return entries.sort((a, b) =>
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );

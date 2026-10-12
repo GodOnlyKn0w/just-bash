@@ -1,3 +1,4 @@
+import { resolve as resolveHostPath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
 import { fsError } from "../fs/fs-error.js";
@@ -50,7 +51,7 @@ interface WorldSettings {
 
 /** The options of WorldBinding for this module. */
 interface VirtualWorldOptions extends WorldSettings {
-  /** Working directory in the world; the input's cwd when omitted. */
+  /** Working directory in the world, an absolute path; the input's hostCwd when omitted. */
   readonly cwd?: string;
   /** Initial files: path to UTF-8 content, relative paths against cwd. Ignored with fork. */
   readonly files?: Readonly<Record<string, string>>;
@@ -276,7 +277,7 @@ class VirtualWorld implements WorldBackend {
   }
 
   async fork(version: string): Promise<WorldBinding> {
-    if (!this.store.hasVersion(version)) {
+    if (!this.store.has("version", version)) {
       throw fsError("ENOENT", `ENOENT: world version ${version}`);
     }
     return {
@@ -296,8 +297,10 @@ class VirtualWorld implements WorldBackend {
 }
 
 /**
- * Creates the virtual world bound by a WorldBinding. The snapshot store is
- * options.snapshots, else input.snapshots, else the in-memory store
+ * Creates the virtual world bound by a WorldBinding. The world's working
+ * directory is options.cwd, an absolute path in the world, else
+ * input.hostCwd. The snapshot store is options.snapshots, resolved against
+ * input.hostCwd, else input.snapshots, else the in-memory store
  * options.memory, else a new in-memory store. A world with options.fork
  * starts from that version and rejects with ENOENT when the store lacks it.
  */
@@ -305,12 +308,20 @@ export async function createWorldBackend(
   input: WorldBackendInput,
 ): Promise<WorldBackend> {
   const options = parseOptions(input.options);
-  const directory = options.snapshots ?? input.snapshots;
+  if (options.cwd !== undefined && !options.cwd.startsWith("/")) {
+    throw new Error(
+      `world options: cwd must be an absolute path: ${options.cwd}`,
+    );
+  }
+  const directory =
+    options.snapshots === undefined
+      ? input.snapshots
+      : resolveHostPath(input.hostCwd, options.snapshots);
   const store =
     directory !== undefined
       ? directoryStore(directory)
       : memoryStore(options.memory);
-  const cwd = options.cwd ?? input.cwd;
+  const cwd = options.cwd ?? input.hostCwd;
   const state =
     options.fork !== undefined
       ? await WorldState.load(store, options.fork)

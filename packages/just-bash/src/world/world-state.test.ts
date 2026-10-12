@@ -59,6 +59,22 @@ describe("WorldState versions", () => {
     await state.fs.utimes("/f", new Date(0), new Date(0));
     expect(state.save()).toBe(before);
   });
+
+  it("includes the permission bits of the root", async () => {
+    const store = memoryStore();
+    const state = new WorldState(store);
+    const before = state.save();
+    await state.fs.chmod("/", 0o700);
+    const after = state.save();
+    expect(after).not.toBe(before);
+    expect(versionEntries(store, after)?.[0]).toEqual({
+      path: "/",
+      kind: "directory",
+      mode: 0o700,
+    });
+    const loaded = await WorldState.load(store, after);
+    expect(loaded.save()).toBe(after);
+  });
 });
 
 describe("WorldState load", () => {
@@ -111,12 +127,13 @@ describe("directory snapshot store", () => {
 
     const reopened = directoryStore(directory);
     expect(versionEntries(reopened, version)).toEqual([
-      { path: "/", kind: "directory" },
-      { path: "/main", kind: "symlink", target: "/src/main.ts" },
-      { path: "/src", kind: "directory" },
+      { path: "/", kind: "directory", mode: 0o755 },
+      { path: "/main", kind: "symlink", mode: 0o777, target: "/src/main.ts" },
+      { path: "/src", kind: "directory", mode: 0o755 },
       {
         path: "/src/main.ts",
         kind: "file",
+        mode: 0o644,
         version: contentVersion("export {};\n"),
       },
     ]);

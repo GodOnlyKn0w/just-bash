@@ -122,19 +122,22 @@ export interface WorldJob {
   kill(): Promise<void>;
 }
 
-/**
- * One path of a world version. Symbolic links are part of this world but not
- * of tree's interface, which only knows files and directories; they are
- * listed with kind "symlink" and their target.
- */
-export interface WorldVersionEntry {
-  readonly path: string;
-  readonly kind: "file" | "directory" | "symlink";
-  /** Content version of a file. */
-  readonly version?: string;
-  /** Target of a symbolic link. */
-  readonly target?: string;
-}
+/** The entry at one path of a world version, with its permission bits. */
+export type WorldVersionEntry =
+  | {
+      readonly path: string;
+      readonly mode: number;
+      readonly kind: "file";
+      /** Content version of the file. */
+      readonly version: string;
+    }
+  | { readonly path: string; readonly mode: number; readonly kind: "directory" }
+  | {
+      readonly path: string;
+      readonly mode: number;
+      readonly kind: "symlink";
+      readonly target: string;
+    };
 
 export type JsonValue =
   | null
@@ -188,8 +191,9 @@ export interface WorldBackend {
   close(): Promise<void>;
 }
 
+/** hostCwd is a directory on the host's machine; the world's working directory is the backend's WorldBackend.cwd. */
 export interface WorldBackendInput {
-  readonly cwd: string;
+  readonly hostCwd: string;
   readonly options: JsonValue | undefined;
   readonly snapshots?: string;
 }

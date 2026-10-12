@@ -9,7 +9,7 @@ import { createWorldBackend } from "../../world/virtual-world.js";
 describe("python3 in a virtual world", () => {
   it("attributes the files python reads and writes to its command invocation", async () => {
     const backend = await createWorldBackend({
-      cwd: "/work",
+      hostCwd: "/work",
       options: { python: true, files: { "in.txt": "data" } },
     });
     const changes: WorldChange[] = [];

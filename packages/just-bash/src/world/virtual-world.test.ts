@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -40,7 +40,7 @@ async function world(
   snapshots?: string,
 ): Promise<{ backend: WorldBackend; reports: Report[] }> {
   const backend = await createWorldBackend({
-    cwd: "/work",
+    hostCwd: "/work",
     options: options as never,
     ...(snapshots === undefined ? {} : { snapshots }),
   });
@@ -201,6 +201,27 @@ describe("command observation", () => {
     ]);
   });
 
+  it("reports reads through links at the final target and reads of a link at the link", async () => {
+    const { backend, reports } = await world({ files: { "real/f": "x" } });
+    await run(backend, "ln -s real dir; ln -s dir/f link");
+    reports.length = 0;
+    await run(backend, "cat link; readlink link; cat dir/f");
+    const reads = reports
+      .filter((r) => r.type === "read" && r.path.startsWith("/work"))
+      .map((r) => (r.type === "read" ? [r.kind, r.path] : []));
+    expect(reads).toContainEqual(["content", "/work/real/f"]);
+    expect(reads).toContainEqual(["stat", "/work/link"]);
+    expect(reads.filter(([, path]) => path === "/work/dir/f")).toEqual([]);
+    expect(await backend.readEntry("/work/link", tool)).toEqual({
+      kind: "file",
+      content: Buffer.from("x"),
+    });
+    expect(reports.at(-1)).toMatchObject({
+      path: "/work/real/f",
+      kind: "content",
+    });
+  });
+
   it("keeps concurrent executions apart", async () => {
     const { backend, reports } = await world({
       files: { left: "l", right: "r" },
@@ -224,6 +245,34 @@ describe("command observation", () => {
       else if (path.includes("right")) expect(execution).toEqual(other);
       else expect(path).toBe("/work");
     }
+  });
+});
+
+describe("working directory and snapshot location", () => {
+  it("takes the world's cwd from the options or hostCwd, and resolves snapshots against hostCwd", async () => {
+    const host = temporaryDirectory();
+    const backend = await createWorldBackend({
+      hostCwd: host,
+      options: { cwd: "/project", snapshots: "store" },
+    });
+    opened.push(backend);
+    expect(backend.cwd).toBe("/project");
+    await backend.bind(recorder().observer, undefined);
+    await backend.versions?.current();
+    expect(readdirSync(join(host, "store")).sort()).toEqual([
+      "contents",
+      "trees",
+      "versions",
+    ]);
+    const defaulted = await createWorldBackend({
+      hostCwd: "/host/dir",
+      options: undefined,
+    });
+    opened.push(defaulted);
+    expect(defaulted.cwd).toBe("/host/dir");
+    await expect(
+      createWorldBackend({ hostCwd: host, options: { cwd: "relative" } }),
+    ).rejects.toThrow("absolute");
   });
 });
 
@@ -310,7 +359,7 @@ describe("versions", () => {
     await first.backend.writeFile("/work/unrecorded", Buffer.from("x"), human);
 
     const second = await createWorldBackend({
-      cwd: "/work",
+      hostCwd: "/work",
       options: undefined,
       snapshots,
     });
@@ -322,6 +371,7 @@ describe("versions", () => {
     expect(entries).toContainEqual({
       path: "/work/f",
       kind: "file",
+      mode: 0o644,
       version: contentVersion("one\n"),
     });
     expect(
@@ -351,7 +401,7 @@ describe("versions", () => {
     expect(binding?.options).toMatchObject({ cwd: "/work", fork: version });
 
     const forked = await createWorldBackend({
-      cwd: "/elsewhere",
+      hostCwd: "/elsewhere",
       options: binding?.options,
     });
     opened.push(forked);
@@ -365,7 +415,7 @@ describe("versions", () => {
     });
     await expect(
       createWorldBackend({
-        cwd: "/",
+        hostCwd: "/",
         options: { ...(binding?.options as object), fork: "0123456789ab" },
       }),
     ).rejects.toMatchObject({ code: "ENOENT" });

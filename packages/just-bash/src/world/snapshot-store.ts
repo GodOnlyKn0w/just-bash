@@ -15,15 +15,15 @@ export type StoreLocation =
   | { readonly memory: string };
 
 /**
- * `content` objects are file bytes keyed by their content version; `tree`
- * objects are serialized directory listings keyed by the content version of
- * the serialization.
+ * `content` objects are file bytes keyed by their content version. `tree`
+ * objects are serialized directory listings and `version` objects
+ * serialized world versions, each keyed by the content version of the
+ * serialization; the id of a `version` object is a world version.
  */
-export type ObjectKind = "content" | "tree";
+export type ObjectKind = "content" | "tree" | "version";
 
 /**
- * Content-addressed storage of world versions. A world version is the id of a
- * root tree recorded with addVersion. Objects and versions never change once
+ * Content-addressed storage of world versions. Objects never change once
  * stored, so a world version always denotes the same world.
  */
 export interface SnapshotStore {
@@ -32,8 +32,6 @@ export interface SnapshotStore {
   /** Stores bytes under id unless an object with that id is already stored. */
   put(kind: ObjectKind, id: string, bytes: Uint8Array): void;
   get(kind: ObjectKind, id: string): Uint8Array | undefined;
-  addVersion(id: string): void;
-  hasVersion(id: string): boolean;
 }
 
 /** Ids are lowercase hex; the directory store only uses such text as file names. */
@@ -44,8 +42,8 @@ class MemoryStore implements SnapshotStore {
   private readonly objects: Record<ObjectKind, Map<string, Uint8Array>> = {
     content: new Map(),
     tree: new Map(),
+    version: new Map(),
   };
-  private readonly versions = new Set<string>();
 
   constructor(id: string) {
     this.location = { memory: id };
@@ -63,14 +61,6 @@ class MemoryStore implements SnapshotStore {
   get(kind: ObjectKind, id: string): Uint8Array | undefined {
     return this.objects[kind].get(id)?.slice();
   }
-
-  addVersion(id: string): void {
-    this.versions.add(id);
-  }
-
-  hasVersion(id: string): boolean {
-    return this.versions.has(id);
-  }
 }
 
 const memoryStores = new Map<string, MemoryStore>();
@@ -85,15 +75,14 @@ export function memoryStore(id: string = randomUUID()): SnapshotStore {
   return store;
 }
 
-const DIRECTORIES: Record<ObjectKind | "version", string> = {
+const DIRECTORIES: Record<ObjectKind, string> = {
   content: "contents",
   tree: "trees",
   version: "versions",
 };
 
 /**
- * A store in a directory: contents/<id>, trees/<id>, and an empty
- * versions/<id> for each world version. Every file is written to a temporary
+ * A store in a directory: contents/<id>, trees/<id>, and versions/<id>. Every file is written to a temporary
  * name and renamed, so a file that exists is complete.
  */
 class DirectoryStore implements SnapshotStore {
@@ -110,13 +99,13 @@ class DirectoryStore implements SnapshotStore {
     }
   }
 
-  private path(kind: ObjectKind | "version", id: string): string | undefined {
+  private path(kind: ObjectKind, id: string): string | undefined {
     return ID.test(id)
       ? join(this.directory, DIRECTORIES[kind], id)
       : undefined;
   }
 
-  private exists(kind: ObjectKind | "version", id: string): boolean {
+  private exists(kind: ObjectKind, id: string): boolean {
     const key = `${kind}/${id}`;
     if (this.known.has(key)) return true;
     const path = this.path(kind, id);
@@ -125,7 +114,7 @@ class DirectoryStore implements SnapshotStore {
     return true;
   }
 
-  private write(kind: ObjectKind | "version", id: string, bytes: Uint8Array) {
+  private write(kind: ObjectKind, id: string, bytes: Uint8Array) {
     if (this.exists(kind, id)) return;
     const path = this.path(kind, id);
     if (path === undefined) throw new Error(`invalid object id: ${id}`);
@@ -151,14 +140,6 @@ class DirectoryStore implements SnapshotStore {
   get(kind: ObjectKind, id: string): Uint8Array | undefined {
     if (!this.exists(kind, id)) return undefined;
     return readFileSync(this.path(kind, id) as string);
-  }
-
-  addVersion(id: string): void {
-    this.write("version", id, new Uint8Array(0));
-  }
-
-  hasVersion(id: string): boolean {
-    return this.exists("version", id);
   }
 }
 

@@ -216,15 +216,31 @@ export class WorldFiles {
     return [];
   }
 
+  /**
+   * The path of the entry a read acts on: the final target of the links on
+   * path when the read follows links, else the link itself.
+   */
+  private readPath(path: string, follows: boolean): string {
+    try {
+      return follows
+        ? this.state.fs.resolvePathWithSymlinks(path)
+        : this.state.fs.resolveIntermediateSymlinks(path);
+    } catch {
+      // A loop of links has no final target; the read names path itself.
+      return normalizePath(path);
+    }
+  }
+
   private reportRead(
     execution: WorldExecution,
     path: string,
     kind: WorldReadKind,
     version?: string,
+    follows = true,
   ): void {
     this.observer?.read({
       execution,
-      path: normalizePath(path),
+      path: this.readPath(path, follows),
       kind,
       ...(version === undefined ? {} : { version }),
     });
@@ -251,18 +267,20 @@ export class WorldFiles {
         ? READS[method as ReadMethod]
         : undefined;
       if (read !== undefined) {
+        // lstat and readlink act on a link itself; the other reads follow it.
+        const follows = method !== "lstat" && method !== "readlink";
         let result: unknown;
         try {
           result = await fs[method](...args);
         } catch (error) {
-          this.reportRead(execution, path, "stat");
+          this.reportRead(execution, path, "stat", undefined, follows);
           throw error;
         }
         const version =
           read === "content"
             ? this.state.versionOf(await this.state.fs.readFileBuffer(path))
             : undefined;
-        this.reportRead(execution, path, read, version);
+        this.reportRead(execution, path, read, version, follows);
         return result;
       }
       const move =
