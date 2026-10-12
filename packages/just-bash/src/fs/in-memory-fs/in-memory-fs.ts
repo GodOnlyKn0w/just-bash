@@ -60,6 +60,36 @@ export interface FsData {
 export interface InMemoryFsOptions {
   /** Aggregate materialized file bytes retained by this filesystem. */
   maxTotalBytes?: number;
+  /**
+   * Called after the entry stored at a path is added, replaced, removed
+   * (entry undefined), or has its mode changed. Paths are normalized and
+   * never pass through a symlink. Modification times do not trigger it.
+   */
+  onEntryChange?: (path: string, entry: FsEntry | undefined) => void;
+}
+
+/** Entry map that reports every write to the path it touched. */
+class ObservedEntries extends Map<string, FsEntry> {
+  constructor(
+    private readonly changed: (
+      path: string,
+      entry: FsEntry | undefined,
+    ) => void,
+  ) {
+    super();
+  }
+
+  override set(path: string, entry: FsEntry): this {
+    super.set(path, entry);
+    this.changed(path, entry);
+    return this;
+  }
+
+  override delete(path: string): boolean {
+    const deleted = super.delete(path);
+    if (deleted) this.changed(path, undefined);
+    return deleted;
+  }
 }
 
 // Text encoder for legacy string content conversion
@@ -80,7 +110,7 @@ function isFileInit(
 }
 
 export class InMemoryFs implements IFileSystem {
-  private data: Map<string, FsEntry> = new Map();
+  private data: Map<string, FsEntry>;
   private entryIdentities = new WeakMap<FsEntry, string>();
   private nextEntryIdentity = 1;
   private readonly maxTotalBytes: number;
@@ -206,6 +236,9 @@ export class InMemoryFs implements IFileSystem {
   }
 
   constructor(initialFiles?: InitialFiles, options: InMemoryFsOptions = {}) {
+    this.data = options.onEntryChange
+      ? new ObservedEntries(options.onEntryChange)
+      : new Map();
     this.maxTotalBytes = options.maxTotalBytes ?? 1024 * 1024 * 1024;
     if (!Number.isSafeInteger(this.maxTotalBytes) || this.maxTotalBytes < 0) {
       throw new Error("InMemoryFs: invalid maxTotalBytes");
@@ -967,6 +1000,8 @@ export class InMemoryFs implements IFileSystem {
     }
 
     entry.mode = mode;
+    // Store the same entry again so observers see the mode change.
+    this.data.set(normalized, entry);
   }
 
   // Create a symbolic link
