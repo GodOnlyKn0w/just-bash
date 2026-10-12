@@ -1,5 +1,6 @@
 import { type ByteString, readBytesFrom } from "../../encoding.js";
 import { ExclusiveCreateUnsupportedError } from "../create-exclusive.js";
+import { fsError } from "../fs-error.js";
 import { InMemoryFs } from "../in-memory-fs/in-memory-fs.js";
 import type {
   BufferEncoding,
@@ -382,7 +383,10 @@ export class MountableFs implements IFileSystem {
       if (options?.recursive) {
         return; // Silently succeed like mkdir -p
       }
-      throw new Error(`EEXIST: directory already exists, mkdir '${path}'`);
+      throw fsError(
+        "EEXIST",
+        `EEXIST: directory already exists, mkdir '${path}'`,
+      );
     }
 
     // Check if this would be a parent of a mount point
@@ -412,7 +416,10 @@ export class MountableFs implements IFileSystem {
     const syscall = options.directory ? "mkdir" : "open";
 
     if (this.mounts.has(normalized)) {
-      throw new Error(`EEXIST: file already exists, ${syscall} '${path}'`);
+      throw fsError(
+        "EEXIST",
+        `EEXIST: file already exists, ${syscall} '${path}'`,
+      );
     }
 
     const { fs, relativePath } = this.routePath(path);
@@ -445,7 +452,10 @@ export class MountableFs implements IFileSystem {
     const { fs, relativePath } = this.routePath(path);
     const target = fs as SyncWrites;
     if (!target.mkdirSync) {
-      throw new Error(`ENOSYS: function not implemented, mkdir '${path}'`);
+      throw fsError(
+        "ENOSYS",
+        `ENOSYS: function not implemented, mkdir '${path}'`,
+      );
     }
     target.mkdirSync(relativePath, options);
   }
@@ -458,7 +468,10 @@ export class MountableFs implements IFileSystem {
     const { fs, relativePath } = this.routePath(path);
     const target = fs as SyncWrites;
     if (!target.writeFileSync) {
-      throw new Error(`ENOSYS: function not implemented, write '${path}'`);
+      throw fsError(
+        "ENOSYS",
+        `ENOSYS: function not implemented, write '${path}'`,
+      );
     }
     target.writeFileSync(relativePath, content);
   }
@@ -506,13 +519,16 @@ export class MountableFs implements IFileSystem {
 
     // Cannot remove mount points
     if (this.mounts.has(normalized)) {
-      throw new Error(`EBUSY: mount point, cannot remove '${path}'`);
+      throw fsError("EBUSY", `EBUSY: mount point, cannot remove '${path}'`);
     }
 
     // Check if this contains mount points
     const childMounts = this.getChildMountPoints(normalized);
     if (childMounts.length > 0) {
-      throw new Error(`EBUSY: contains mount points, cannot remove '${path}'`);
+      throw fsError(
+        "EBUSY",
+        `EBUSY: contains mount points, cannot remove '${path}'`,
+      );
     }
 
     const { fs, relativePath } = this.routePath(path);
@@ -522,7 +538,10 @@ export class MountableFs implements IFileSystem {
   async cp(src: string, dest: string, options?: CpOptions): Promise<void> {
     const srcStat = await this.stat(src);
     if (srcStat.isDirectory && isSameOrDescendantPath(src, dest)) {
-      throw new Error(`EINVAL: cannot copy '${src}' into itself, '${dest}'`);
+      throw fsError(
+        "EINVAL",
+        `EINVAL: cannot copy '${src}' into itself, '${dest}'`,
+      );
     }
     const srcRoute = this.routePath(src);
     const destRoute = this.routePath(dest);
@@ -544,12 +563,15 @@ export class MountableFs implements IFileSystem {
     const normalized = normalizePath(src);
     const srcStat = await this.stat(src);
     if (srcStat.isDirectory && isSameOrDescendantPath(src, dest)) {
-      throw new Error(`EINVAL: cannot move '${src}' into itself, '${dest}'`);
+      throw fsError(
+        "EINVAL",
+        `EINVAL: cannot move '${src}' into itself, '${dest}'`,
+      );
     }
 
     // Cannot move mount points
     if (this.mounts.has(normalized)) {
-      throw new Error(`EBUSY: mount point, cannot move '${src}'`);
+      throw fsError("EBUSY", `EBUSY: mount point, cannot move '${src}'`);
     }
 
     const srcRoute = this.routePath(src);
@@ -624,7 +646,8 @@ export class MountableFs implements IFileSystem {
 
     // Hard links must be within the same filesystem
     if (existingRoute.fs !== newRoute.fs) {
-      throw new Error(
+      throw fsError(
+        "EXDEV",
         `EXDEV: cross-device link not permitted, link '${existingPath}' -> '${newPath}'`,
       );
     }

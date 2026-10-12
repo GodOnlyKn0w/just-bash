@@ -197,41 +197,6 @@ describe("InMemoryFs Security - Symlink Handling", () => {
     });
   });
 
-  describe("symlink + write operations", () => {
-    it("should overwrite symlink with file on writeFile", async () => {
-      const fs = new InMemoryFs({
-        "/target.txt": "original",
-      });
-      await fs.symlink("/target.txt", "/link");
-
-      // InMemoryFs writeFile replaces the symlink entry with a file
-      await fs.writeFile("/link", "modified");
-
-      // /link is now a regular file, /target.txt unchanged
-      const viaLink = await fs.readFile("/link");
-      const viaDirect = await fs.readFile("/target.txt");
-      expect(viaLink).toBe("modified");
-      expect(viaDirect).toBe("original");
-    });
-
-    it("should overwrite symlink with file on appendFile", async () => {
-      const fs = new InMemoryFs({
-        "/target.txt": "hello",
-      });
-      await fs.symlink("/target.txt", "/link");
-
-      // appendFile replaces the symlink with a new file entry
-      await fs.appendFile("/link", " world");
-
-      // /link is now a regular file with only the appended content
-      const content = await fs.readFile("/link");
-      expect(content).toBe(" world");
-      // /target.txt unchanged
-      const original = await fs.readFile("/target.txt");
-      expect(original).toBe("hello");
-    });
-  });
-
   describe("symlink + rm operations", () => {
     it("should remove the symlink itself, not the target", async () => {
       const fs = new InMemoryFs({
