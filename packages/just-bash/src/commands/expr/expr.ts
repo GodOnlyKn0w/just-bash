@@ -270,11 +270,3 @@ function evaluateExpr(
   }
   return result;
 }
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "expr",
-  flags: [],
-  needsArgs: true,
-};

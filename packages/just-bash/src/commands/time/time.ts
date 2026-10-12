@@ -211,11 +211,3 @@ function formatElapsedTime(seconds: number): string {
   }
   return `${minutes}:${secs.toFixed(2).padStart(5, "0")}`;
 }
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "time",
-  flags: [{ flag: "-p", type: "boolean" }],
-  needsArgs: true,
-};

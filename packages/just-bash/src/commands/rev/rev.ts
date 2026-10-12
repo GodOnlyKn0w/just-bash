@@ -110,12 +110,3 @@ export const rev: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "rev",
-  flags: [],
-  stdinType: "text",
-  needsFiles: true,
-};

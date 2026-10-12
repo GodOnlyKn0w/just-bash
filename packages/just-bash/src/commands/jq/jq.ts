@@ -471,7 +471,6 @@ export const jqCommand: RuntimeCommand = {
         env: ctx.env,
         namedArgs,
         positionalArgs,
-        coverage: ctx.coverage,
         budget: { operations: 0, callDepth: 0 },
       };
       const appendValues = (target: QueryValue[], next: QueryValue[]): void => {
@@ -628,23 +627,4 @@ export const jqCommand: RuntimeCommand = {
       };
     }
   },
-};
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "jq",
-  flags: [
-    { flag: "-R", type: "boolean" },
-    { flag: "-r", type: "boolean" },
-    { flag: "-c", type: "boolean" },
-    { flag: "-e", type: "boolean" },
-    { flag: "-s", type: "boolean" },
-    { flag: "-n", type: "boolean" },
-    { flag: "-j", type: "boolean" },
-    { flag: "-S", type: "boolean" },
-    { flag: "--tab", type: "boolean" },
-  ],
-  stdinType: "json",
-  needsArgs: true,
 };

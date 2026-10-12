@@ -6,11 +6,3 @@ export const sha1sumCommand: RuntimeCommand = createChecksumCommand(
   "sha1",
   "compute SHA1 message digest",
 );
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "sha1sum",
-  flags: [{ flag: "-c", type: "boolean" }],
-  needsFiles: true,
-};

@@ -365,17 +365,3 @@ export const strings: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "strings",
-  flags: [
-    { flag: "-n", type: "value", valueHint: "number" },
-    { flag: "-t", type: "value", valueHint: "string" },
-    { flag: "-a", type: "boolean" },
-    { flag: "-e", type: "value", valueHint: "string" },
-  ],
-  stdinType: "text",
-  needsFiles: true,
-};

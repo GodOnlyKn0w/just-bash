@@ -560,19 +560,6 @@ function createLazyCommand(def: LazyCommandDef): RuntimeCommand {
         cache.set(def.name, cmd);
       }
 
-      // Emit flag coverage hits when fuzzing (not available in browser bundles)
-      if (
-        ctx.coverage &&
-        (typeof __BROWSER__ === "undefined" || !__BROWSER__)
-      ) {
-        const { emitFlagCoverage } = await raceCancellation(
-          import("./flag-coverage.js"),
-          ctx.signal,
-          `bash: ${def.name} was cancelled before it started\n`,
-        );
-        emitFlagCoverage(ctx.coverage, def.name, args);
-      }
-
       return cmd.execute(args, ctx);
     },
   };

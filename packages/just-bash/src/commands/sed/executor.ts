@@ -494,7 +494,6 @@ function executeCommand(
 
   // Labels don't have addresses and are handled separately
   if (cmd.type === "label") {
-    state.coverage?.hit(`sed:cmd:${cmd.type}`);
     return;
   }
 
@@ -512,7 +511,6 @@ function executeCommand(
     return;
   }
 
-  state.coverage?.hit(`sed:cmd:${cmd.type}`);
   switch (cmd.type) {
     case "substitute": {
       const subCmd = cmd as SubstituteCommand;
@@ -925,7 +923,6 @@ export function executeCommands(
           state,
         )
       ) {
-        state.coverage?.hit("sed:cmd:next");
         // Output current pattern space (will be handled by caller based on silent mode)
         // nCommandOutput respects silent mode - won't print if -n is set
         state.nCommandOutput.push(state.patternSpace);
@@ -970,7 +967,6 @@ export function executeCommands(
           state,
         )
       ) {
-        state.coverage?.hit("sed:cmd:nextAppend");
         if (
           ctx &&
           ctx.currentLineIndex + state.linesConsumedInCycle + 1 <
@@ -1007,7 +1003,6 @@ export function executeCommands(
           state,
         )
       ) {
-        state.coverage?.hit("sed:cmd:branch");
         if (branchCmd.label) {
           const target = labelIndex.get(branchCmd.label);
           if (target !== undefined) {
@@ -1038,7 +1033,6 @@ export function executeCommands(
           state,
         )
       ) {
-        state.coverage?.hit("sed:cmd:branchOnSubst");
         if (state.substitutionMade) {
           state.substitutionMade = false; // Reset flag
           if (branchCmd.label) {
@@ -1073,7 +1067,6 @@ export function executeCommands(
           state,
         )
       ) {
-        state.coverage?.hit("sed:cmd:branchOnNoSubst");
         if (!state.substitutionMade) {
           if (branchCmd.label) {
             const target = labelIndex.get(branchCmd.label);
@@ -1106,7 +1099,6 @@ export function executeCommands(
           state,
         )
       ) {
-        state.coverage?.hit("sed:cmd:group");
         // Execute all commands in the group
         // Lines consumed are tracked in state.linesConsumedInCycle
         executeCommands(groupCmd.commands, state, ctx, limits);

@@ -24,10 +24,3 @@ export const whoami: RuntimeCommand = {
   name: "whoami",
   execute: whoamiExecute,
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "whoami",
-  flags: [],
-};

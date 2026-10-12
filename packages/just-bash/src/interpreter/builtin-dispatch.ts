@@ -295,9 +295,6 @@ function createRevocableCommandContext(
         ? wrapCapability(context.fileDescriptors)
         : undefined,
     ),
-    coverage: dataDescriptor(
-      context.coverage ? wrapCapability(context.coverage) : undefined,
-    ),
     assignShellVariable: dataDescriptor(
       wrapFunction(context.assignShellVariable),
     ),
@@ -450,11 +447,6 @@ export async function dispatchBuiltin(
   stdinRedirected = false,
 ): Promise<ExecResult | null> {
   const { ctx, runCommand } = dispatchCtx;
-
-  // Coverage tracking for builtins (lightweight: only fires when coverage is enabled)
-  if (ctx.coverage && SHELL_BUILTINS.has(commandName)) {
-    ctx.coverage.hit(`bash:builtin:${commandName}`);
-  }
 
   // Built-in commands (special builtins that cannot be overridden by functions)
   if (commandName === "export") {
@@ -899,7 +891,6 @@ export async function executeExternalCommand(
     trace: ctx.trace,
     fileDescriptors: ctx.state.fileDescriptors,
     xpgEcho: ctx.state.shoptOptions.xpg_echo,
-    coverage: ctx.coverage,
     signal: ctx.state.signal,
     jsBootstrapCode: ctx.jsBootstrapCode,
     invokeTool: ctx.invokeTool,

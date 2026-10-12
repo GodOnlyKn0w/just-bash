@@ -15,7 +15,6 @@ import type {
   CommandExecOptions,
   CommandRegistry,
   ExecResult,
-  FeatureCoverageWriter,
   TraceCallback,
 } from "../types.js";
 import type { ProcessSubstitutionEntry } from "./process-substitution.js";
@@ -497,8 +496,6 @@ export interface InterpreterContext {
   trace?: TraceCallback;
   /** Current command substitution nesting depth (for limit enforcement) */
   substitutionDepth?: number;
-  /** Optional feature coverage writer for fuzzing instrumentation */
-  coverage?: FeatureCoverageWriter;
   /**
    * Bootstrap JavaScript code for js-exec.
    * Threaded through the context chain instead of shell env.

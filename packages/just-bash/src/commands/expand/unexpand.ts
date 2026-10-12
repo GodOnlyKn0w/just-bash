@@ -292,15 +292,3 @@ export const unexpand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "unexpand",
-  flags: [
-    { flag: "-t", type: "value", valueHint: "number" },
-    { flag: "-a", type: "boolean" },
-  ],
-  stdinType: "text",
-  needsFiles: true,
-};

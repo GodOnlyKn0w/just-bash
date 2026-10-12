@@ -279,16 +279,3 @@ export const fold: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "fold",
-  flags: [
-    { flag: "-w", type: "value", valueHint: "number" },
-    { flag: "-s", type: "boolean" },
-    { flag: "-b", type: "boolean" },
-  ],
-  stdinType: "text",
-  needsFiles: true,
-};

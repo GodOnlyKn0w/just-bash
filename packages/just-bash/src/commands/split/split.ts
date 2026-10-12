@@ -694,17 +694,3 @@ export const split: RuntimeCommand = {
     }
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "split",
-  flags: [
-    { flag: "-l", type: "value", valueHint: "number" },
-    { flag: "-b", type: "value", valueHint: "string" },
-    { flag: "-n", type: "value", valueHint: "number" },
-    { flag: "-d", type: "boolean" },
-    { flag: "-a", type: "value", valueHint: "number" },
-  ],
-  needsFiles: true,
-};

@@ -61,10 +61,3 @@ export const historyCommand: RuntimeCommand = {
     return { stdout, stderr: "", exitCode: 0 };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "history",
-  flags: [{ flag: "-c", type: "boolean" }],
-};

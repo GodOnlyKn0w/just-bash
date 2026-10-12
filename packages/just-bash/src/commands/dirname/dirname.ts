@@ -54,11 +54,3 @@ export const dirnameCommand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "dirname",
-  flags: [],
-  needsArgs: true,
-};

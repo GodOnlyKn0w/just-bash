@@ -438,18 +438,3 @@ export const xargsCommand: RuntimeCommand = {
     );
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "xargs",
-  flags: [
-    { flag: "-I", type: "value", valueHint: "string" },
-    { flag: "-d", type: "value", valueHint: "delimiter" },
-    { flag: "-n", type: "value", valueHint: "number" },
-    { flag: "-0", type: "boolean" },
-    { flag: "-t", type: "boolean" },
-    { flag: "-r", type: "boolean" },
-  ],
-  stdinType: "text",
-};

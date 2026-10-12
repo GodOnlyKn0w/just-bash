@@ -314,15 +314,3 @@ export const expand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "expand",
-  flags: [
-    { flag: "-t", type: "value", valueHint: "number" },
-    { flag: "-i", type: "boolean" },
-  ],
-  stdinType: "text",
-  needsFiles: true,
-};

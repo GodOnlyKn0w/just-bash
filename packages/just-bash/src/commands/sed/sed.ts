@@ -4,7 +4,6 @@ import { ExecutionLimitError } from "../../interpreter/errors.js";
 import type { ExecutionLimits } from "../../limits.js";
 import type {
   ExecResult,
-  FeatureCoverageWriter,
   RuntimeCommand,
   RuntimeCommandContext,
 } from "../../types.js";
@@ -71,7 +70,6 @@ interface ProcessContentOptions {
   filename?: string;
   fs?: RuntimeCommandContext["fs"];
   cwd?: string;
-  coverage?: FeatureCoverageWriter;
 }
 
 async function processContent(
@@ -80,7 +78,7 @@ async function processContent(
   silent: boolean,
   options: ProcessContentOptions = {},
 ): Promise<{ output: string; exitCode?: number; errorMessage?: string }> {
-  const { limits, filename, fs, cwd, coverage } = options;
+  const { limits, filename, fs, cwd } = options;
 
   // Track if input ended with newline - needed for preserving trailing newline behavior
   const inputEndsWithNewline = content.endsWith("\n");
@@ -136,7 +134,6 @@ async function processContent(
       lineNumber: lineIndex + 1,
       totalLines,
       substitutionMade: false, // Reset for each new line (T command behavior)
-      coverage,
     };
 
     // Create execution context for N command
@@ -466,7 +463,6 @@ export const sedCommand: RuntimeCommand = {
               filename: file,
               fs: ctx.fs,
               cwd: ctx.cwd,
-              coverage: ctx.coverage,
             },
           );
           if (result.errorMessage) {
@@ -512,7 +508,6 @@ export const sedCommand: RuntimeCommand = {
             limits: ctx.limits,
             fs: ctx.fs,
             cwd: ctx.cwd,
-            coverage: ctx.coverage,
           },
         );
         // sed emits text; the pipeline handles encoding.
@@ -585,7 +580,6 @@ export const sedCommand: RuntimeCommand = {
         filename: files.length === 1 ? files[0] : undefined,
         fs: ctx.fs,
         cwd: ctx.cwd,
-        coverage: ctx.coverage,
       });
       return {
         stdout: result.output,
@@ -604,19 +598,4 @@ export const sedCommand: RuntimeCommand = {
       throw e;
     }
   },
-};
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "sed",
-  flags: [
-    { flag: "-n", type: "boolean" },
-    { flag: "-i", type: "boolean" },
-    { flag: "-E", type: "boolean" },
-    { flag: "-r", type: "boolean" },
-    { flag: "-e", type: "value", valueHint: "string" },
-  ],
-  stdinType: "text",
-  needsArgs: true,
 };

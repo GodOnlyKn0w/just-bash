@@ -122,14 +122,3 @@ export const readlinkCommand: RuntimeCommand = {
     return { stdout, stderr: "", exitCode: anyError ? 1 : 0 };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "readlink",
-  flags: [
-    { flag: "-f", type: "boolean" },
-    { flag: "-e", type: "boolean" },
-  ],
-  needsArgs: true,
-};

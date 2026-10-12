@@ -175,7 +175,6 @@ function expandSimplePart(
       if (inDoubleQuotes) {
         return part.user === null ? "~" : `~${part.user}`;
       }
-      ctx.coverage?.hit("bash:expansion:tilde");
       if (part.user === null) {
         // Use HOME if set (even if empty), otherwise fall back to /home/user
         return ctx.state.env.get("HOME") ?? "/home/user";

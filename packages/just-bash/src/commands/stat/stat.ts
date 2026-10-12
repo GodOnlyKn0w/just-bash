@@ -115,14 +115,3 @@ export const statCommand: RuntimeCommand = {
 };
 
 // formatMode imported from ../format-mode.js
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "stat",
-  flags: [
-    { flag: "-c", type: "value", valueHint: "format" },
-    { flag: "-L", type: "boolean" },
-  ],
-  needsArgs: true,
-};

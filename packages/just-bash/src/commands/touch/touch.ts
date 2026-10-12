@@ -186,16 +186,3 @@ export const touchCommand: RuntimeCommand = {
     return { stdout: "", stderr, exitCode };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "touch",
-  flags: [
-    { flag: "-c", type: "boolean" },
-    { flag: "-a", type: "boolean" },
-    { flag: "-m", type: "boolean" },
-    { flag: "-d", type: "value", valueHint: "string" },
-  ],
-  needsArgs: true,
-};

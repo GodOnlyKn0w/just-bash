@@ -1,7 +1,5 @@
 // Types for sed command implementation
 
-import type { FeatureCoverageWriter } from "../../types.js";
-
 // Address with stepping support (e.g., 0~2 for every other line)
 export interface StepAddress {
   first: number;
@@ -316,8 +314,6 @@ export interface SedState {
   branchRequest?: string;
   // Track total lines consumed during this execution cycle (for N command)
   linesConsumedInCycle: number;
-  // Feature coverage writer for fuzzing instrumentation
-  coverage?: FeatureCoverageWriter;
 }
 
 // Range state tracking for pattern ranges like /start/,/end/

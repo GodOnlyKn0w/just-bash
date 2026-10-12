@@ -432,18 +432,3 @@ export const mktempCommand: RuntimeCommand = {
     return creationFailure("File exists");
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "mktemp",
-  flags: [
-    { flag: "-d", type: "boolean" },
-    { flag: "-u", type: "boolean" },
-    { flag: "-q", type: "boolean" },
-    { flag: "-t", type: "boolean" },
-    { flag: "-p", type: "value", valueHint: "path" },
-    { flag: "--suffix", type: "value", valueHint: "string" },
-  ],
-  needsArgs: false,
-};

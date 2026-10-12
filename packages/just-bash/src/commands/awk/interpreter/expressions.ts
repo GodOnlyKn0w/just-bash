@@ -56,7 +56,6 @@ export async function evalExpr(
   ctx: AwkRuntimeContext,
   expr: AwkExpr,
 ): Promise<AwkValue> {
-  ctx.coverage?.hit(`awk:expr:${expr.type}`);
   switch (expr.type) {
     case "number":
       return expr.value;
@@ -159,7 +158,6 @@ async function evalBinaryOp(
   // Regex match operators - handle regex literal specially
   if (op === "~") {
     const left = await evalExpr(ctx, expr.left);
-    if (expr.right.type === "regex") ctx.coverage?.hit("awk:expr:regex");
     const pattern =
       expr.right.type === "regex"
         ? expr.right.pattern
@@ -172,7 +170,6 @@ async function evalBinaryOp(
   }
   if (op === "!~") {
     const left = await evalExpr(ctx, expr.left);
-    if (expr.right.type === "regex") ctx.coverage?.hit("awk:expr:regex");
     const pattern =
       expr.right.type === "regex"
         ? expr.right.pattern
@@ -504,7 +501,6 @@ async function evalInExpr(
 ): Promise<AwkValue> {
   let keyStr: string;
   if (key.type === "tuple") {
-    ctx.coverage?.hit("awk:expr:tuple");
     // Multi-dimensional key: join with SUBSEP
     const parts: string[] = [];
     for (const e of key.elements) {

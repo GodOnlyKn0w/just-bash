@@ -36,7 +36,6 @@ import type {
   CommandHook,
   CommandRegistry,
   ExecResult,
-  FeatureCoverageWriter,
   TraceCallback,
 } from "../types.js";
 import { expandAlias as expandAliasHelper } from "./alias-expansion.js";
@@ -130,8 +129,6 @@ export interface InterpreterOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Optional trace callback for performance profiling */
   trace?: TraceCallback;
-  /** Optional feature coverage writer for fuzzing instrumentation */
-  coverage?: FeatureCoverageWriter;
   /** Bootstrap JavaScript code for js-exec */
   jsBootstrapCode?: string;
   /** Tool invoker hook for js-exec's `tools` proxy */
@@ -162,7 +159,6 @@ export class Interpreter {
       executeCommand: this.executeCommand.bind(this),
       sleep: options.sleep,
       trace: options.trace,
-      coverage: options.coverage,
       jsBootstrapCode: options.jsBootstrapCode,
       invokeTool: options.invokeTool,
     };
@@ -545,7 +541,6 @@ export class Interpreter {
     stdin: string,
     stdinOwned: boolean,
   ): Promise<ExecResult> {
-    this.ctx.coverage?.hit(`bash:cmd:${node.type}`);
     switch (node.type) {
       case "SimpleCommand":
         return this.executeSimpleCommand(node, stdin);

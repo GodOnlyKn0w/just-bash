@@ -451,21 +451,3 @@ export const join: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "join",
-  flags: [
-    { flag: "-1", type: "value", valueHint: "number" },
-    { flag: "-2", type: "value", valueHint: "number" },
-    { flag: "-t", type: "value", valueHint: "delimiter" },
-    { flag: "-a", type: "value", valueHint: "number" },
-    { flag: "-v", type: "value", valueHint: "number" },
-    { flag: "-e", type: "value", valueHint: "string" },
-    { flag: "-o", type: "value", valueHint: "format" },
-    { flag: "-i", type: "boolean" },
-  ],
-  needsArgs: true,
-  minArgs: 2,
-};

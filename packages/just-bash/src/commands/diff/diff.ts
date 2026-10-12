@@ -185,19 +185,3 @@ export const diffCommand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "diff",
-  flags: [
-    { flag: "--normal", type: "boolean" },
-    { flag: "-u", type: "boolean" },
-    { flag: "-c", type: "boolean" },
-    { flag: "-q", type: "boolean" },
-    { flag: "-s", type: "boolean" },
-    { flag: "-i", type: "boolean" },
-  ],
-  needsArgs: true,
-  minArgs: 2,
-};

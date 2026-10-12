@@ -297,15 +297,3 @@ export const base64Command: RuntimeCommand = {
     }
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "base64",
-  flags: [
-    { flag: "-d", type: "boolean" },
-    { flag: "-w", type: "value", valueHint: "number" },
-  ],
-  stdinType: "text",
-  needsFiles: true,
-};

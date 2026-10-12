@@ -199,16 +199,3 @@ export const mvCommand: RuntimeCommand = {
     return { stdout, stderr, exitCode };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "mv",
-  flags: [
-    { flag: "-f", type: "boolean" },
-    { flag: "-n", type: "boolean" },
-    { flag: "-v", type: "boolean" },
-  ],
-  needsArgs: true,
-  minArgs: 2,
-};

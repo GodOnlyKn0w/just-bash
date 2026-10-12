@@ -954,11 +954,3 @@ export const sqlite3Command: RuntimeCommand = {
     }
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "sqlite3",
-  flags: [],
-  needsArgs: true,
-};

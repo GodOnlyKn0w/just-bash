@@ -248,14 +248,3 @@ export const seqCommand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "seq",
-  flags: [
-    { flag: "-s", type: "value", valueHint: "string" },
-    { flag: "-w", type: "boolean" },
-  ],
-  needsArgs: true,
-};

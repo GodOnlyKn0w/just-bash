@@ -66,7 +66,6 @@ async function executeStmt(
   ctx: AwkRuntimeContext,
   stmt: AwkStmt,
 ): Promise<void> {
-  ctx.coverage?.hit(`awk:stmt:${stmt.type}`);
   switch (stmt.type) {
     case "block":
       await executeBlock(ctx, stmt.statements);

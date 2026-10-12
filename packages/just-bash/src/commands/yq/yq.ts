@@ -342,7 +342,6 @@ export const yqCommand: RuntimeCommand = {
             }
           : undefined,
         env: ctx.env,
-        coverage: ctx.coverage,
         budget: { operations: 0, callDepth: 0 },
       };
       const dataLimits = {
@@ -480,19 +479,4 @@ export const yqCommand: RuntimeCommand = {
       };
     }
   },
-};
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "yq",
-  flags: [
-    { flag: "-r", type: "boolean" },
-    { flag: "-c", type: "boolean" },
-    { flag: "-s", type: "boolean" },
-    { flag: "-i", type: "value", valueHint: "string" },
-    { flag: "-o", type: "value", valueHint: "string" },
-  ],
-  stdinType: "text",
-  needsArgs: true,
 };

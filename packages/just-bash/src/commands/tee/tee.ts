@@ -72,12 +72,3 @@ export const teeCommand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "tee",
-  flags: [{ flag: "-a", type: "boolean" }],
-  stdinType: "text",
-  needsArgs: true,
-};

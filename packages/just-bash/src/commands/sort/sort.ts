@@ -219,27 +219,3 @@ export const sortCommand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "sort",
-  flags: [
-    { flag: "-r", type: "boolean" },
-    { flag: "-n", type: "boolean" },
-    { flag: "-u", type: "boolean" },
-    { flag: "-f", type: "boolean" },
-    { flag: "-h", type: "boolean" },
-    { flag: "-V", type: "boolean" },
-    { flag: "-d", type: "boolean" },
-    { flag: "-M", type: "boolean" },
-    { flag: "-b", type: "boolean" },
-    { flag: "-s", type: "boolean" },
-    { flag: "-c", type: "boolean" },
-    { flag: "-k", type: "value", valueHint: "string" },
-    { flag: "-t", type: "value", valueHint: "delimiter" },
-    { flag: "-o", type: "value", valueHint: "path" },
-  ],
-  stdinType: "text",
-  needsFiles: true,
-};

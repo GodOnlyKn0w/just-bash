@@ -8,7 +8,6 @@
 import { BoundedStringBuilder } from "../../bounded-builder.js";
 import { mapToRecord } from "../../helpers/env.js";
 import { ExecutionLimitError } from "../../interpreter/errors.js";
-import type { FeatureCoverageWriter } from "../../types.js";
 import { utf8ByteLength } from "../printf/escapes.js";
 import {
   evalArrayBuiltin,
@@ -134,8 +133,6 @@ export interface EvalContext {
     { params: string[]; body: AstNode; closure?: Map<string, unknown> }
   >;
   labels?: Set<string>;
-  /** Feature coverage writer for fuzzing instrumentation */
-  coverage?: FeatureCoverageWriter;
   /** Shared across every recursive evaluation and builtin invocation. */
   budget: QueryEvaluationBudget;
 }
@@ -232,7 +229,6 @@ function createContext(options?: EvaluateOptions): EvalContext {
     env: options?.env,
     namedArgs: options?.namedArgs,
     positionalArgs: options?.positionalArgs,
-    coverage: options?.coverage,
     budget: options?.budget ?? { operations: 0, callDepth: 0 },
   };
 }
@@ -254,7 +250,6 @@ function withVar(
     currentPath: ctx.currentPath,
     funcs: ctx.funcs,
     labels: ctx.labels,
-    coverage: ctx.coverage,
     budget: ctx.budget,
   };
 }
@@ -455,7 +450,6 @@ export interface EvaluateOptions {
   namedArgs?: Map<string, QueryValue>;
   /** Positional arguments (in order) exposed via $ARGS.positional */
   positionalArgs?: QueryValue[];
-  coverage?: FeatureCoverageWriter;
   /** Reuse across multiple input documents to enforce one command budget. */
   budget?: QueryEvaluationBudget;
 }
@@ -539,7 +533,6 @@ function evaluateNode(
   ast: AstNode,
   ctx: EvalContext,
 ): QueryValue[] {
-  ctx.coverage?.hit(`jq:node:${ast.type}`);
   switch (ast.type) {
     case "Identity":
       return [value];

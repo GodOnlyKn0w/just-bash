@@ -69,7 +69,6 @@ import type {
   Command,
   CommandHook,
   CommandRegistry,
-  FeatureCoverageWriter,
   RuntimeCommand,
   TraceCallback,
 } from "./types.js";
@@ -204,11 +203,6 @@ export interface BashOptions {
    * Useful for identifying performance bottlenecks.
    */
   trace?: TraceCallback;
-  /**
-   * Feature coverage writer for fuzzing instrumentation.
-   * When provided, interpreter emits coverage hits for analysis.
-   */
-  coverage?: FeatureCoverageWriter;
   /** Runs around every command; see CommandHook. */
   commandHook?: CommandHook;
   /**
@@ -281,7 +275,6 @@ export class Bash {
   private sleepFn?: (ms: number) => Promise<void>;
   private traceFn?: TraceCallback;
   private logger?: BashLogger;
-  private coverageWriter?: FeatureCoverageWriter;
   private commandHook?: CommandHook;
   private jsBootstrapCode?: string;
   private invokeToolFn?: (
@@ -344,9 +337,6 @@ export class Bash {
 
     // Store logger if provided
     this.logger = options.logger;
-
-    // Store coverage writer if provided (for fuzzing instrumentation)
-    this.coverageWriter = options.coverage;
 
     this.commandHook = options.commandHook;
 
@@ -812,7 +802,6 @@ export class Bash {
               ),
             sleep: this.sleepFn,
             trace: this.traceFn,
-            coverage: this.coverageWriter,
             commandHook: this.commandHook,
             jsBootstrapCode: this.jsBootstrapCode,
             invokeTool: this.invokeToolFn,

@@ -126,17 +126,3 @@ export const uniqCommand: RuntimeCommand = {
     };
   },
 };
-
-import type { CommandFuzzInfo } from "../fuzz-flags-types.js";
-
-export const flagsForFuzzing: CommandFuzzInfo = {
-  name: "uniq",
-  flags: [
-    { flag: "-c", type: "boolean" },
-    { flag: "-d", type: "boolean" },
-    { flag: "-u", type: "boolean" },
-    { flag: "-i", type: "boolean" },
-  ],
-  stdinType: "text",
-  needsFiles: true,
-};

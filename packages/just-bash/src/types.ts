@@ -3,14 +3,6 @@ import type { CommandExecutionBudget } from "./execution-scope.js";
 import type { IFileSystem } from "./fs/interface.js";
 import type { ExecutionLimits } from "./limits.js";
 
-/**
- * Lightweight interface for feature coverage tracking during fuzzing.
- * Lives here to avoid circular dependencies between fuzzing → core modules.
- */
-export interface FeatureCoverageWriter {
-  hit(feature: string): void;
-}
-
 export interface ExecResult {
   stdout: string;
   stderr: string;
@@ -262,11 +254,6 @@ export interface RuntimeCommandContext {
    * Used to prevent stack exhaustion from deeply nested $(...).
    */
   substitutionDepth?: number;
-  /**
-   * Feature coverage writer for fuzzing instrumentation.
-   * When provided, commands emit coverage hits for analysis.
-   */
-  coverage?: FeatureCoverageWriter;
   /**
    * Abort signal from the current execution context.
    * Commands that spawn sub-executions (bash -c, xargs, etc.)
