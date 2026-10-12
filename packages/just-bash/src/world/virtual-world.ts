@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
 import { fsError } from "../fs/fs-error.js";
 import { resolvePath } from "../fs/path-utils.js";
+import { hostEntries } from "./host-import.js";
 import type {
   ExecOptions,
   ExecResult,
@@ -53,7 +54,9 @@ interface WorldSettings {
 interface VirtualWorldOptions extends WorldSettings {
   /** Working directory in the world, an absolute path; the input's hostCwd when omitted. */
   readonly cwd?: string;
-  /** Initial files: path to UTF-8 content, relative paths against cwd. Ignored with fork. */
+  /** A host directory whose content a new world starts with. Ignored with fork. */
+  readonly import?: WorldImport;
+  /** Initial files: path to UTF-8 content, relative paths against cwd; written after the import. Ignored with fork. */
   readonly files?: Readonly<Record<string, string>>;
   /** Directory of the snapshot store. */
   readonly snapshots?: string;
@@ -61,6 +64,44 @@ interface VirtualWorldOptions extends WorldSettings {
   readonly memory?: string;
   /** World version the world starts from, given by fork. */
   readonly fork?: string;
+}
+
+/** The option `import` of a world. */
+interface WorldImport {
+  /** A directory on the host's machine; a relative path resolves against the input's hostCwd. */
+  readonly from: string;
+  /** The absolute path in the world that receives the content of `from`; the world's working directory when omitted. */
+  readonly to?: string;
+  /** Paths relative to `from`, compared segment by segment as literal text. Each leaves out its entry and all entries below it. */
+  readonly exclude?: readonly string[];
+}
+
+function parseImport(value: JsonValue): void {
+  const fields = value as { [key: string]: JsonValue };
+  for (const key of Object.keys(fields)) {
+    if (key !== "from" && key !== "to" && key !== "exclude") {
+      throw new Error(
+        `world options: unknown field import.${key}; allowed: from, to, exclude`,
+      );
+    }
+  }
+  if (typeof fields.from !== "string") {
+    throw new Error("world options: import.from must be a string");
+  }
+  if (fields.to !== undefined) {
+    if (typeof fields.to !== "string" || !fields.to.startsWith("/")) {
+      throw new Error("world options: import.to must be an absolute path");
+    }
+  }
+  if (
+    fields.exclude !== undefined &&
+    !(
+      Array.isArray(fields.exclude) &&
+      fields.exclude.every((path) => typeof path === "string")
+    )
+  ) {
+    throw new Error("world options: import.exclude must be a list of strings");
+  }
 }
 
 function parseOptions(value: JsonValue | undefined): VirtualWorldOptions {
@@ -72,6 +113,7 @@ function parseOptions(value: JsonValue | undefined): VirtualWorldOptions {
     cwd: "string",
     python: "boolean",
     javascript: "boolean",
+    import: "object",
     files: "object",
     snapshots: "string",
     memory: "string",
@@ -97,13 +139,42 @@ function parseOptions(value: JsonValue | undefined): VirtualWorldOptions {
       throw new Error(`world options: files.${path} must be a string`);
     }
   }
+  if (value.import !== undefined) parseImport(value.import);
   return value as VirtualWorldOptions;
 }
 
-/** A new world: the layout a shell creates, then the initial files. */
+/** Puts the content of the host directory of `source` below its target directory in the world. */
+async function importHostDirectory(
+  state: WorldState,
+  source: WorldImport,
+  hostCwd: string,
+  cwd: string,
+): Promise<void> {
+  const to = source.to ?? cwd;
+  state.fs.mkdirSync(to, { recursive: true });
+  for (const entry of hostEntries(
+    resolveHostPath(hostCwd, source.from),
+    source.exclude ?? [],
+  )) {
+    const path = resolvePath(to, entry.path);
+    if (entry.kind === "file") {
+      state.fs.writeFileSync(path, entry.content, undefined, {
+        mode: entry.mode,
+      });
+    } else if (entry.kind === "directory") {
+      state.fs.mkdirSync(path, { recursive: true });
+      await state.fs.chmod(path, entry.mode);
+    } else {
+      await state.fs.symlink(entry.target, path);
+    }
+  }
+}
+
+/** A new world: the layout a shell creates, then the imported host directory, then the initial files. */
 async function initialState(
   store: SnapshotStore,
   cwd: string,
+  hostCwd: string,
   options: VirtualWorldOptions,
 ): Promise<WorldState> {
   const state = new WorldState(store);
@@ -115,6 +186,9 @@ async function initialState(
     python: options.python,
     javascript: options.javascript,
   });
+  if (options.import !== undefined) {
+    await importHostDirectory(state, options.import, hostCwd, cwd);
+  }
   for (const [path, content] of Object.entries(options.files ?? {})) {
     state.fs.writeFileSync(resolvePath(cwd, path), content);
   }
@@ -303,6 +377,18 @@ class VirtualWorld implements WorldBackend {
  * input.hostCwd, else input.snapshots, else the in-memory store
  * options.memory, else a new in-memory store. A world with options.fork
  * starts from that version and rejects with ENOENT when the store lacks it.
+ *
+ * A world without options.fork is new. It holds the layout of a shell (/bin,
+ * /dev, /proc, and the working directory), then the content of the host
+ * directory options.import.from below options.import.to, then options.files,
+ * each later step replacing a file that an earlier step put at the same path.
+ * The import takes the bytes and the permission bits of regular files, the
+ * permission bits of directories, and the target text of symbolic links.
+ * The creation rejects with code ENOENT when options.import.from does not
+ * exist and with code ENOTDIR when it is not a directory. It rejects with an
+ * error naming the host path of an entry that is a FIFO, a socket, or a
+ * device file, and with code ENOSPC when the imported bytes exceed the byte
+ * limit of the world's file system.
  */
 export async function createWorldBackend(
   input: WorldBackendInput,
@@ -325,7 +411,7 @@ export async function createWorldBackend(
   const state =
     options.fork !== undefined
       ? await WorldState.load(store, options.fork)
-      : await initialState(store, cwd, options);
+      : await initialState(store, cwd, input.hostCwd, options);
   const settings: WorldSettings = {
     ...(options.python === undefined ? {} : { python: options.python }),
     ...(options.javascript === undefined

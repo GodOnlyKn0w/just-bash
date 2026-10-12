@@ -526,7 +526,7 @@ const BANNED_PATTERNS = [
     pattern:
       /(?:from\s*["'](?:node:fs(?:\/promises)?|fs\/promises)["']|require\s*\(\s*["'](?:node:fs(?:\/promises)?|fs\/promises)["']\s*\))/,
     filePattern:
-      /src\/(?!fs\/)(?!comparison-tests\/)(?!commands\/js-exec\/)(?!commands\/(?:python3\/worker|sqlite3\/sqlite3)\.ts$)(?!world\/snapshot-store\.ts$).*\.(?:ts|js)$/,
+      /src\/(?!fs\/)(?!comparison-tests\/)(?!commands\/js-exec\/)(?!commands\/(?:python3\/worker|sqlite3\/sqlite3)\.ts$)(?!world\/(?:snapshot-store|host-import)\.ts$).*\.(?:ts|js)$/,
     message:
       "Raw host filesystem access is restricted to reviewed filesystem and\n" +
       "worker bootstrap gates so virtual-path and error sanitization cannot be bypassed.",
