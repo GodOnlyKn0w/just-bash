@@ -2,9 +2,7 @@
  * Tests for the generic `invokeTool` hook on `JavaScriptConfig`.
  *
  * Exercises the `tools` proxy in js-exec end-to-end by passing a hand-rolled
- * invokeTool callback that maps a tool map → execution. This is what
- * `@just-bash/executor` does internally for inline tools; the tests live in
- * just-bash because they verify the platform hook, not the executor package.
+ * invokeTool callback that maps a tool map → execution.
  */
 
 import { describe, expect, it } from "vitest";

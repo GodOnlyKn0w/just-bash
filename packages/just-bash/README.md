@@ -317,10 +317,7 @@ out. Tool implementations should forward it to network requests and other
 cancelable work so effects do not outlive the sandbox execution.
 
 The hook is generic — wire any tool framework through it (raw maps, MCP,
-Anthropic tool-use, etc.). For full GraphQL / OpenAPI / MCP discovery via
-`@executor-js/sdk`, plus auto-generated bash namespace commands, use the
-companion package
-[**`@just-bash/executor`**](../just-bash-executor/README.md).
+Anthropic tool-use, etc.).
 
 ### Python Support
 

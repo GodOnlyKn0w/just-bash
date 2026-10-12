@@ -118,9 +118,7 @@ export interface JavaScriptConfig {
    *
    * Setting `invokeTool` implicitly enables `js-exec` (no separate
    * `javascript: true` needed). Pair with `customCommands` if you want the
-   * same tools available as bash commands. The companion package
-   * `@just-bash/executor` produces a matching `invokeTool` + `commands` pair
-   * from inline tools and/or `@executor-js/sdk` discovery.
+   * same tools available as bash commands.
    */
   invokeTool?: (
     path: string,

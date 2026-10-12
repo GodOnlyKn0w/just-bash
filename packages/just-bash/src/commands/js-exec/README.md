@@ -229,11 +229,7 @@ When `javascript.invokeTool` is set on the Bash constructor, js-exec scripts
 get a global `tools` proxy that routes calls through that callback. The hook
 is `(path, argsJson, abortSignal) => Promise<string>`. Implementations should
 forward `abortSignal` to cancelable work so tool effects do not outlive a
-timed-out execution. Bring your own tool framework, or
-use the companion package
-[`@just-bash/executor`](../../../../just-bash-executor/README.md) which
-produces an `invokeTool` plus matching bash commands from inline tool maps
-and/or `@executor-js/sdk` discovery (GraphQL, OpenAPI, MCP).
+timed-out execution.
 
 ## Limits
 
