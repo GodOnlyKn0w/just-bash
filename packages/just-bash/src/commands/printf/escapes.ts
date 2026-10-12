@@ -134,13 +134,25 @@ export function parseWidthPrecision(
 }
 
 /**
+ * Marks a byte of a `\\x` escape that is not part of a valid UTF-8 sequence:
+ * the character INVALID_BYTE + byte, a lone low surrogate, which UTF-8 text
+ * never contains.
+ */
+export const INVALID_BYTE = 0xdc00;
+
+/**
  * Process escape sequences in a string
  * Handles: \n, \t, \r, \\, \a, \b, \f, \v, \e, \0NNN (octal), \xHH (hex),
  *          \uHHHH (unicode), \UHHHHHHHH (unicode)
+ *
+ * A run of `\xHH` escapes that is not valid UTF-8 gives one character for
+ * each byte: the character of the same code, or with markInvalidBytes the
+ * character INVALID_BYTE + byte for a byte from 0x80.
  */
 export function processEscapes(
   str: string,
   maxBytes: number = DEFAULT_MAX_FORMAT_BYTES,
+  markInvalidBytes = false,
 ): string {
   if (utf8ByteLength(str) > maxBytes) {
     throw new ExecutionLimitError(
@@ -233,9 +245,12 @@ export function processEscapes(
               const decoder = new TextDecoder("utf-8", { fatal: true });
               result += decoder.decode(new Uint8Array(bytes));
             } catch {
-              // If not valid UTF-8, fall back to Latin-1 (1:1 byte to codepoint)
+              // Not valid UTF-8: each byte stays one character, marked when
+              // the caller asks for it.
               for (const byte of bytes) {
-                result += String.fromCharCode(byte);
+                result += String.fromCharCode(
+                  markInvalidBytes && byte >= 0x80 ? INVALID_BYTE + byte : byte,
+                );
               }
             }
             i = j;

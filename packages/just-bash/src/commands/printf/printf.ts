@@ -1,4 +1,11 @@
 import { sprintf } from "sprintf-js";
+import {
+  type ByteString,
+  bytesOutput,
+  encodeUtf8ToBytes,
+  latin1FromBytes,
+  unsafeBytesFromLatin1,
+} from "../../encoding.js";
 import { ExecutionLimitError } from "../../interpreter/errors.js";
 import { getErrorMessage } from "../../interpreter/helpers/errors.js";
 import type {
@@ -10,15 +17,40 @@ import { hasHelpFlag, showHelp } from "../help.js";
 import {
   applyWidth,
   assertFormattingInteger,
+  INVALID_BYTE,
   processEscapes,
   utf8ByteLength,
 } from "./escapes.js";
 import { formatStrftime } from "./strftime.js";
 
+/** The characters that mark invalid bytes; output with one is byte-shaped. */
+const INVALID_BYTES = /[\udc80-\udcff]/u;
+const INVALID_BYTES_ALL = /[\udc80-\udcff]/gu;
+
+/** `text` with each marked byte as the character of the same code, the value a variable holds. */
+function invalidBytesAsCharacters(text: string): string {
+  return text.replace(INVALID_BYTES_ALL, (marked) =>
+    String.fromCharCode(marked.charCodeAt(0) - INVALID_BYTE),
+  );
+}
+
+/** The bytes of `text`: UTF-8 for its characters, and the byte itself for each marked byte. */
+function bytesWithInvalidBytes(text: string): ByteString {
+  let bytes = "";
+  let start = 0;
+  for (const match of text.matchAll(INVALID_BYTES_ALL)) {
+    bytes += latin1FromBytes(encodeUtf8ToBytes(text.slice(start, match.index)));
+    bytes += String.fromCharCode(match[0].charCodeAt(0) - INVALID_BYTE);
+    start = match.index + 1;
+  }
+  bytes += latin1FromBytes(encodeUtf8ToBytes(text.slice(start)));
+  return unsafeBytesFromLatin1(bytes);
+}
+
 /**
  * Decode a byte array as UTF-8 with error recovery.
  * Valid UTF-8 sequences are decoded to their Unicode characters.
- * Invalid bytes are preserved as Latin-1 characters (byte value = char code).
+ * An invalid byte becomes the character INVALID_BYTE + byte.
  */
 function decodeUtf8WithRecovery(bytes: number[]): string {
   let result = "";
@@ -46,8 +78,8 @@ function decodeUtf8WithRecovery(bytes: number[]): string {
         i += 2;
         continue;
       }
-      // Invalid or incomplete - output as Latin-1
-      result += String.fromCharCode(b0);
+      // Invalid or incomplete - keep the byte
+      result += String.fromCharCode(INVALID_BYTE + b0);
       i++;
       continue;
     }
@@ -61,8 +93,8 @@ function decodeUtf8WithRecovery(bytes: number[]): string {
       ) {
         // Check for overlong encoding
         if (b0 === 0xe0 && bytes[i + 1] < 0xa0) {
-          // Overlong - output first byte as Latin-1
-          result += String.fromCharCode(b0);
+          // Overlong - keep the first byte
+          result += String.fromCharCode(INVALID_BYTE + b0);
           i++;
           continue;
         }
@@ -72,8 +104,8 @@ function decodeUtf8WithRecovery(bytes: number[]): string {
           ((bytes[i + 1] & 0x3f) << 6) |
           (bytes[i + 2] & 0x3f);
         if (codePoint >= 0xd800 && codePoint <= 0xdfff) {
-          // Invalid surrogate - output first byte as Latin-1
-          result += String.fromCharCode(b0);
+          // Invalid surrogate - keep the first byte
+          result += String.fromCharCode(INVALID_BYTE + b0);
           i++;
           continue;
         }
@@ -81,8 +113,8 @@ function decodeUtf8WithRecovery(bytes: number[]): string {
         i += 3;
         continue;
       }
-      // Invalid or incomplete - output as Latin-1
-      result += String.fromCharCode(b0);
+      // Invalid or incomplete - keep the byte
+      result += String.fromCharCode(INVALID_BYTE + b0);
       i++;
       continue;
     }
@@ -97,8 +129,8 @@ function decodeUtf8WithRecovery(bytes: number[]): string {
       ) {
         // Check for overlong encoding
         if (b0 === 0xf0 && bytes[i + 1] < 0x90) {
-          // Overlong - output first byte as Latin-1
-          result += String.fromCharCode(b0);
+          // Overlong - keep the first byte
+          result += String.fromCharCode(INVALID_BYTE + b0);
           i++;
           continue;
         }
@@ -109,8 +141,8 @@ function decodeUtf8WithRecovery(bytes: number[]): string {
           (bytes[i + 3] & 0x3f);
         // Check for valid range (U+10000 to U+10FFFF)
         if (codePoint > 0x10ffff) {
-          // Invalid - output first byte as Latin-1
-          result += String.fromCharCode(b0);
+          // Invalid - keep the first byte
+          result += String.fromCharCode(INVALID_BYTE + b0);
           i++;
           continue;
         }
@@ -118,14 +150,14 @@ function decodeUtf8WithRecovery(bytes: number[]): string {
         i += 4;
         continue;
       }
-      // Invalid or incomplete - output as Latin-1
-      result += String.fromCharCode(b0);
+      // Invalid or incomplete - keep the byte
+      result += String.fromCharCode(INVALID_BYTE + b0);
       i++;
       continue;
     }
 
-    // Invalid lead byte (10xxxxxx or 11111xxx) - output as Latin-1
-    result += String.fromCharCode(b0);
+    // Invalid lead byte (10xxxxxx or 11111xxx) - keep the byte
+    result += String.fromCharCode(INVALID_BYTE + b0);
     i++;
   }
 
@@ -232,7 +264,7 @@ export const printfCommand: RuntimeCommand = {
       );
 
       // First, process escape sequences in the format string.
-      const processedFormat = processEscapes(format, maxOutputBytes);
+      const processedFormat = processEscapes(format, maxOutputBytes, true);
 
       // Format and handle argument reuse (bash loops through format until all args consumed)
       let output = "";
@@ -279,6 +311,7 @@ export const printfCommand: RuntimeCommand = {
 
       // If -v was specified, store in variable instead of printing
       if (targetVar) {
+        output = invalidBytesAsCharacters(output);
         // Check for array subscript syntax: name[key] or name["key"] or name['key']
         const arrayMatch = targetVar.match(
           /^([a-zA-Z_][a-zA-Z0-9_]*)\[(['"]?)(.+?)\2\]$/,
@@ -316,7 +349,9 @@ export const printfCommand: RuntimeCommand = {
       }
 
       return {
-        stdout: output,
+        ...(INVALID_BYTES.test(output)
+          ? bytesOutput(bytesWithInvalidBytes(output))
+          : { stdout: output }),
         stderr: errorMessage,
         exitCode: hadError ? 1 : 0,
         internalStdinConsumed: 0,
