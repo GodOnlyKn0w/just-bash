@@ -716,7 +716,6 @@ const SKIP_DIRS = new Set([
   ".pnpm-store",
   ".next",
   "coverage",
-  ".deepsec",
   ".agents",
   ".codex",
   "todo",
@@ -724,7 +723,6 @@ const SKIP_DIRS = new Set([
 
 const SKIP_PATH_PATTERNS = [
   /(^|\/)\.pnpm-store(\/|$)/,
-  /(^|\/)\.deepsec(\/|$)/,
   /(^|\/)todo(\/|$)/,
   /(^|\/)findings?(\/|$)/,
 ];

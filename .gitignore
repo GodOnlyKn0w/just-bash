@@ -17,5 +17,4 @@ todo/
 .docs-test-tmp/
 fuzz-*.log
 .claude/settings.local.json
-.deepsec/
 plans/

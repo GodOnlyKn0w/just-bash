@@ -93,9 +93,7 @@ describe("check-banned-patterns filesystem boundary", () => {
 
   it("does not scan generated finding and planning inputs", () => {
     const root = tempDirectory("just-bash-lint-inputs-");
-    mkdirSync(join(root, ".deepsec"));
     mkdirSync(join(root, "todo"));
-    writeFileSync(join(root, ".deepsec", "finding.ts"), "const bad = {};\n");
     writeFileSync(join(root, "todo", "plan.ts"), "const bad = {};\n");
     writeFileSync(join(root, "safe.ts"), "const safe = new Map();\n");
 
