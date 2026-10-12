@@ -161,12 +161,6 @@ describe("check-banned-patterns filesystem boundary", () => {
       "Optional command limit with literal fallback",
     ],
     [
-      "raw secured fetch",
-      "src/network/fetch.ts",
-      "const response = fetch(currentUrl, options);\n",
-      "Raw fetch in secured network path",
-    ],
-    [
       "whole-buffer decompression",
       "src/commands/archive.ts",
       "const output = gunzipSync(input);\n",

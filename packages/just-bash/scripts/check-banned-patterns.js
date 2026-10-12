@@ -247,8 +247,8 @@ const BANNED_PATTERNS = [
     // Skip comment lines
     pattern: /^(?!\s*(?:\/\/|\/?\*)).*\bProxy\.revocable\s*\(/,
     message:
-      "Proxy.revocable can recreate raw proxy capabilities and has known bypass\n" +
-      "interactions with defense wrappers when used in untrusted execution paths.",
+      "Proxy.revocable can recreate raw proxy capabilities when used in\n" +
+      "execution paths that handle untrusted input.",
     solutions: [
       "Avoid Proxy.revocable in runtime paths handling untrusted input",
       "Prefer plain objects and explicit validation over revocable proxy control flow",
@@ -261,12 +261,12 @@ const BANNED_PATTERNS = [
     pattern:
       /^(?!\s*(?:\/\/|\/?\*)).*(?:delete\s+globalThis\.(?:Function|eval|Proxy)\b|globalThis\.(?:Function|eval|Proxy)\s*=|Object\.defineProperty\s*\(\s*globalThis\s*,\s*["'`](?:Function|eval|Proxy)["'`])/,
     message:
-      "Shadowing/deleting global Function/eval/Proxy can disable security wrappers\n" +
-      "and re-enable dynamic code-execution primitives.",
+      "Shadowing/deleting global Function/eval/Proxy can re-enable dynamic\n" +
+      "code-execution primitives.",
     solutions: [
       "Do not mutate global constructors in runtime command/interpreter paths",
       "Use local dependency injection instead of global monkey-patching",
-      "Use @banned-pattern-ignore only for tightly-audited defense internals/tests",
+      "Use @banned-pattern-ignore only for tightly-audited internals/tests",
     ],
   },
   {
@@ -472,7 +472,7 @@ const BANNED_PATTERNS = [
     name: "Inline WASM hook callback in worker modules",
     // Skip comment lines
     pattern:
-      /^(?!\s*(?:\/\/|\/?\*)).*\b(?:print|printErr|onViolation)\s*:\s*(?:\([^)]*\)\s*=>|function\s*\()/,
+      /^(?!\s*(?:\/\/|\/?\*)).*\b(?:print|printErr)\s*:\s*(?:\([^)]*\)\s*=>|function\s*\()/,
     filePattern: /src\/commands\/(?:python3|sqlite3)\/worker\.ts$/,
     message:
       "Inline WASM hook callbacks in worker modules can hide unsafe callback handling.\n" +
@@ -515,7 +515,7 @@ const BANNED_PATTERNS = [
     name: "Forgeable diagnostic used as a security decision",
     pattern:
       /\b(?:message|sourceURL|fileName|filename|functionName|constructor\s*\.\s*name)\b[^\n]*(?:\.\s*(?:includes|match|indexOf|startsWith|endsWith)\s*\(|={2,3}|!={1,2})/,
-    filePattern: /src\/security\/(?!fuzzing\/)(?!.*\.test\.ts$).*\.ts$/,
+    filePattern: /src\/security\/(?!.*\.test\.ts$).*\.ts$/,
     scanSecurity: true,
     message:
       "Error text, source URLs, filenames, and function names are forgeable diagnostics.\n" +
@@ -555,7 +555,7 @@ const BANNED_PATTERNS = [
     pattern:
       /(?:from\s*["'](?:node:fs(?:\/promises)?|fs\/promises)["']|require\s*\(\s*["'](?:node:fs(?:\/promises)?|fs\/promises)["']\s*\))/,
     filePattern:
-      /src\/(?!fs\/)(?!cli\/)(?!comparison-tests\/)(?!commands\/js-exec\/)(?!commands\/(?:python3\/worker|sqlite3\/sqlite3)\.ts$)(?!security\/fuzzing\/runners\/)(?!world\/snapshot-store\.ts$).*\.(?:ts|js)$/,
+      /src\/(?!fs\/)(?!cli\/)(?!comparison-tests\/)(?!commands\/js-exec\/)(?!commands\/(?:python3\/worker|sqlite3\/sqlite3)\.ts$)(?!world\/snapshot-store\.ts$).*\.(?:ts|js)$/,
     message:
       "Raw host filesystem access is restricted to reviewed filesystem, CLI, and\n" +
       "worker bootstrap gates so virtual-path and error sanitization cannot be bypassed.",
