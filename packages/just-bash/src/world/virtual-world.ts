@@ -1,10 +1,7 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { fileURLToPath } from "node:url";
 import { Bash } from "../Bash.js";
-import { utf8ByteLength } from "../encoding.js";
 import { fsError } from "../fs/fs-error.js";
 import { resolvePath } from "../fs/path-utils.js";
-import type { CommandHookCall, ExecResult as ShellResult } from "../types.js";
 import type {
   ExecOptions,
   ExecResult,
@@ -22,6 +19,7 @@ import type {
   WorldStat,
   WorldVersions,
 } from "./interface.js";
+import { Shell } from "./shell.js";
 import {
   directoryStore,
   memoryStore,
@@ -64,12 +62,6 @@ interface VirtualWorldOptions extends WorldSettings {
   readonly fork?: string;
 }
 
-/** The execution an exec or job runs for, and the command invocation that is running, if any. */
-interface Scope {
-  readonly execution: WorldExecution;
-  readonly commandId?: string;
-}
-
 function parseOptions(value: JsonValue | undefined): VirtualWorldOptions {
   if (value === undefined) return Object.create(null);
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -107,18 +99,6 @@ function parseOptions(value: JsonValue | undefined): VirtualWorldOptions {
   return value as VirtualWorldOptions;
 }
 
-function outputBytes(result: ShellResult): {
-  stdoutBytes: number;
-  stderrBytes: number;
-} {
-  const bytes =
-    result.stdoutKind === "bytes" || result.stdoutEncoding === "binary";
-  return {
-    stdoutBytes: bytes ? result.stdout.length : utf8ByteLength(result.stdout),
-    stderrBytes: utf8ByteLength(result.stderr),
-  };
-}
-
 /** A new world: the layout a shell creates, then the initial files. */
 async function initialState(
   store: SnapshotStore,
@@ -148,9 +128,9 @@ async function initialState(
 
 /**
  * The virtual world backend: the world is a WorldState and commands run in a
- * just-bash shell on it. Every command the shell runs is a command
- * invocation, and every file system operation it performs is reported for
- * the invocation running it.
+ * just-bash shell on it, in a worker thread. Every command the shell runs is
+ * a command invocation, and every file system operation it performs is
+ * reported for the invocation running it.
  */
 class VirtualWorld implements WorldBackend {
   readonly capabilities: WorldCapabilities = CAPABILITIES;
@@ -159,9 +139,7 @@ class VirtualWorld implements WorldBackend {
   private readonly store: SnapshotStore;
   private readonly settings: WorldSettings;
   private readonly forkedFrom: string | undefined;
-  private readonly scopes = new AsyncLocalStorage<Scope>();
-  private shell: Bash | undefined;
-  private commands = 0;
+  private readonly shell: Shell;
   private jobs = 0;
 
   constructor(
@@ -176,6 +154,7 @@ class VirtualWorld implements WorldBackend {
     this.cwd = cwd;
     this.settings = settings;
     this.forkedFrom = forkedFrom;
+    this.shell = new Shell({ cwd, ...settings }, this.files);
   }
 
   async bind(
@@ -232,76 +211,14 @@ class VirtualWorld implements WorldBackend {
     return this.files.createOutput(path, execution);
   }
 
-  /** The execution of the current scope, with the running command invocation. */
-  private current(): WorldExecution {
-    const scope = this.scopes.getStore();
-    if (scope === undefined) {
-      throw new Error("world file access outside an exec or job");
-    }
-    return scope.commandId === undefined
-      ? scope.execution
-      : { ...scope.execution, commandId: scope.commandId };
-  }
-
-  /** Runs command as a command invocation of the current scope and reports it when it ends. */
-  private invoke(
-    command: CommandHookCall,
-    run: () => Promise<ShellResult>,
-  ): Promise<ShellResult> {
-    const scope = this.scopes.getStore();
-    if (scope === undefined) return run();
-    const commandId = `command-${++this.commands}`;
-    return this.scopes.run(
-      { execution: scope.execution, commandId },
-      async () => {
-        let exitCode = 1;
-        let bytes = { stdoutBytes: 0, stderrBytes: 0 };
-        try {
-          const result = await run();
-          exitCode = result.exitCode;
-          bytes = outputBytes(result);
-          return result;
-        } catch (error) {
-          const code = (error as { exitCode?: unknown } | null)?.exitCode;
-          if (typeof code === "number") exitCode = code;
-          throw error;
-        } finally {
-          this.files.observer?.invoked({
-            execution: { ...scope.execution, commandId },
-            ...(scope.commandId === undefined
-              ? {}
-              : { parentCommandId: scope.commandId }),
-            name: command.name,
-            args: command.args,
-            cwd: command.cwd,
-            exitCode,
-            ...bytes,
-          });
-        }
-      },
-    );
-  }
-
-  private bash(): Bash {
-    this.shell ??= new Bash({
-      fs: this.files.fileSystem(() => this.current()),
-      cwd: this.cwd,
-      python: this.settings.python,
-      javascript: this.settings.javascript,
-      commandHook: (command, run) => this.invoke(command, run),
-    });
-    return this.shell;
-  }
-
   private async run(
     command: string,
     execution: WorldExecution,
     onOutput: (chunk: Buffer) => void,
     signal: AbortSignal,
   ): Promise<WorldExit> {
-    const result = await this.scopes.run({ execution }, () =>
-      this.bash().exec(command, { signal }),
-    );
+    const result = await this.shell.run(command, execution, signal);
+    if ("terminated" in result) return { signal: "SIGKILL" };
     if (result.stdout.length > 0) onOutput(Buffer.from(result.stdout, "utf8"));
     if (result.stderr.length > 0) onOutput(Buffer.from(result.stderr, "utf8"));
     return signal.aborted ? { signal: "SIGTERM" } : { code: result.exitCode };
@@ -373,8 +290,8 @@ class VirtualWorld implements WorldBackend {
     };
   }
 
-  async close(): Promise<void> {
-    // The state lives in memory and in the snapshot store; nothing to release.
+  close(): Promise<void> {
+    return this.shell.close();
   }
 }
 

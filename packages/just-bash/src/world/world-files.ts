@@ -74,6 +74,23 @@ const CHANGES: readonly ChangeMethod[] = [
   "utimes",
 ];
 
+/**
+ * An IFileSystem that hands every operation on the world to forward. Paths
+ * resolve locally; getAllPaths, which only in-memory file systems answer,
+ * gives nothing.
+ */
+export function forwardingFileSystem(
+  forward: (method: FsMethod, args: unknown[]) => Promise<unknown>,
+): IFileSystem {
+  const fs: Record<string, unknown> = Object.create(null);
+  for (const method of [...Object.keys(READS), ...CHANGES]) {
+    fs[method] = (...args: unknown[]) => forward(method as FsMethod, args);
+  }
+  fs.resolvePath = (base: string, path: string) => resolvePath(base, path);
+  fs.getAllPaths = () => [];
+  return fs as unknown as IFileSystem;
+}
+
 function isInside(path: string, roots: readonly string[]): boolean {
   return roots.some((root) => path.startsWith(root === "/" ? "/" : `${root}/`));
 }
@@ -260,21 +277,6 @@ export class WorldFiles {
         (prior) => this.report(execution, prior, move),
       );
     });
-  }
-
-  /** An IFileSystem whose operations belong to the execution current() gives at each call. */
-  fileSystem(current: () => WorldExecution): IFileSystem {
-    const forward =
-      (method: FsMethod) =>
-      (...args: unknown[]) =>
-        this.call(current(), method, args);
-    const fs: Record<string, unknown> = Object.create(null);
-    for (const method of [...Object.keys(READS), ...CHANGES]) {
-      fs[method] = forward(method as FsMethod);
-    }
-    fs.resolvePath = (base: string, path: string) => resolvePath(base, path);
-    fs.getAllPaths = () => [];
-    return fs as unknown as IFileSystem;
   }
 
   /** Runs a synchronous change for execution and reports it. */

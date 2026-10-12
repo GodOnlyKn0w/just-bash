@@ -33,6 +33,8 @@ function recorder(): { observer: WorldObserver; reports: Report[] } {
 const tool: WorldExecution = { driver: "tool", invocation: { callId: "c1" } };
 const human: WorldExecution = { driver: "human" };
 
+const opened: WorldBackend[] = [];
+
 async function world(
   options: Record<string, unknown> = {},
   snapshots?: string,
@@ -42,6 +44,7 @@ async function world(
     options: options as never,
     ...(snapshots === undefined ? {} : { snapshots }),
   });
+  opened.push(backend);
   const { observer, reports } = recorder();
   await backend.bind(observer, undefined);
   return { backend, reports };
@@ -67,7 +70,8 @@ function temporaryDirectory(): string {
   directories.push(directory);
   return directory;
 }
-afterEach(() => {
+afterEach(async () => {
+  for (const backend of opened.splice(0)) await backend.close();
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -303,6 +307,7 @@ describe("versions", () => {
       options: undefined,
       snapshots,
     });
+    opened.push(second);
     await second.bind(recorder().observer, restore);
     expect(await second.versions?.current()).toBe(restore);
     expect((await run(second, "cat d/l; ls")).output).toBe("one\nd\nf\n");
@@ -342,6 +347,7 @@ describe("versions", () => {
       cwd: "/elsewhere",
       options: binding?.options,
     });
+    opened.push(forked);
     await forked.bind(recorder().observer, undefined);
     expect(forked.cwd).toBe("/work");
     expect(forked.versions?.forkedFrom).toBe(version);
@@ -357,4 +363,57 @@ describe("versions", () => {
       }),
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
+});
+
+describe("shell worker", () => {
+  it("terminates a run that ignores an abort and keeps the world for the next run", async () => {
+    const { backend } = await world();
+    await run(backend, "echo kept > f");
+    const stop = new AbortController();
+    let ticks = 0;
+    const tick = setInterval(() => ticks++, 50);
+    setTimeout(() => stop.abort(), 200);
+    const { exit } = await backend.exec("while true; do :; done", {
+      execution: tool,
+      signal: stop.signal,
+      onOutput: () => undefined,
+    });
+    clearInterval(tick);
+    expect(exit).toEqual({ signal: "SIGKILL" });
+    // The host's timers kept firing while the loop ran.
+    expect(ticks).toBeGreaterThan(20);
+    expect((await run(backend, "cat f")).output).toBe("kept\n");
+    await backend.close();
+  }, 20000);
+
+  it("ends a cooperative command on abort and kills a job", async () => {
+    const { backend, reports } = await world();
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 200);
+    const { exit } = await backend.exec("sleep 100", {
+      execution: tool,
+      signal: stop.signal,
+      onOutput: () => undefined,
+    });
+    expect(exit).toEqual({ signal: "SIGTERM" });
+
+    const chunks: Buffer[] = [];
+    const job = await backend.startJob("echo started > log; sleep 100", {
+      execution: { ...tool, jobId: "job-a" },
+      onOutput: (chunk) => chunks.push(chunk),
+    });
+    await expect
+      .poll(() => reports.some((r) => r.type === "changed"))
+      .toBe(true);
+    await job.kill();
+    expect(await job.ended).toEqual({
+      exit: { signal: "SIGTERM" },
+      residualKilled: false,
+    });
+    expect(reports.find((r) => r.type === "changed")?.execution).toEqual({
+      ...tool,
+      jobId: "job-a",
+    });
+    await backend.close();
+  }, 20000);
 });
