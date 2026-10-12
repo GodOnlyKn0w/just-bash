@@ -97,6 +97,7 @@ export type CommandName =
   | "gunzip"
   | "zcat"
   | "tar"
+  | "git"
   | "yq"
   | "xan"
   | "sqlite3"
@@ -482,13 +483,17 @@ const commandLoaders: LazyCommandDef<CommandName>[] = [
   },
 ];
 
-// tar, yq, xan, and sqlite3 don't work in browsers
+// tar, git, yq, xan, and sqlite3 don't work in browsers
 // __BROWSER__ is defined by esbuild at build time for browser bundles
 declare const __BROWSER__: boolean | undefined;
 if (typeof __BROWSER__ === "undefined" || !__BROWSER__) {
   commandLoaders.push({
     name: "tar" as CommandName,
     load: async () => (await import("./tar/tar.js")).tarCommand,
+  });
+  commandLoaders.push({
+    name: "git" as CommandName,
+    load: async () => (await import("./git/git.js")).gitCommand,
   });
   commandLoaders.push({
     name: "yq" as CommandName,

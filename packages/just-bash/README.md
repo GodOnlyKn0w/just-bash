@@ -95,6 +95,10 @@ duplicating internal defaults.
 
 `gzip` (+ `gunzip`, `zcat`), `tar`
 
+### Version Control
+
+`git` (subcommands init, add, commit, status, diff, log, and stash; any other subcommand or option exits with 129)
+
 ### Navigation & Environment
 
 `basename`, `cd`, `dirname`, `du`, `echo`, `env`, `export`, `find`, `hostname`, `printenv`, `pwd`, `tee`

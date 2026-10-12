@@ -52,7 +52,7 @@ const result = await bash.exec("cat input.txt | grep pattern");
 
 **File operations**: `basename`, `chmod`, `cp`, `dirname`, `du`, `file`, `find`, `ln`, `ls`, `mkdir`, `mktemp`, `mv`, `od`, `pwd`, `readlink`, `rm`, `rmdir`, `split`, `stat`, `touch`, `tree`
 
-**Utilities**: `alias`, `base64`, `bash`, `clear`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `gzip`, `gunzip`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `yes`, `zcat`
+**Utilities**: `alias`, `base64`, `bash`, `clear`, `date`, `diff`, `echo`, `env`, `expr`, `false`, `git`, `gzip`, `gunzip`, `help`, `history`, `hostname`, `html-to-markdown`, `md5sum`, `printenv`, `printf`, `seq`, `sh`, `sha1sum`, `sha256sum`, `sleep`, `tar`, `tee`, `time`, `timeout`, `true`, `unalias`, `which`, `whoami`, `yes`, `zcat`
 
 All commands support `--help` for usage details.
 
