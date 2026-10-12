@@ -101,4 +101,5 @@ export type {
   ExecResult,
   IFileSystem,
   ResolvedCommandContext,
+  StreamedBytes,
 } from "./types.js";

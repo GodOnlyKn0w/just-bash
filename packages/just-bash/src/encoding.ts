@@ -167,6 +167,14 @@ function stringFromBytes(bytes: Uint8Array): string {
   return chunks.join("");
 }
 
+/** The bytes of `b` as a Uint8Array: one element for each character. */
+export function uint8ArrayFromBytes(b: ByteString): Uint8Array {
+  const text = latin1FromBytes(b);
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
+  return bytes;
+}
+
 /**
  * Convert a `Uint8Array` to a `ByteString`. Each byte becomes one char.
  * The reverse is `Uint8Array.from(latin1FromBytes(b), (c) => c.charCodeAt(0))`.

@@ -36,6 +36,7 @@ import type {
   CommandHook,
   CommandRegistry,
   ExecResult,
+  StreamedBytes,
   TraceCallback,
 } from "../types.js";
 import { expandAlias as expandAliasHelper } from "./alias-expansion.js";
@@ -82,6 +83,12 @@ import { isPosixSpecialBuiltin } from "./helpers/shell-constants.js";
 import { nullCommandExitStatus } from "./helpers/substitution-status.js";
 import { isWordLiteralMatch } from "./helpers/word-matching.js";
 import { traceSimpleCommand } from "./helpers/xtrace.js";
+import {
+  emitLive,
+  emitLiveError,
+  emittedBytes,
+  streamedSince,
+} from "./live-output.js";
 import { executePipeline as executePipelineHelper } from "./pipeline-execution.js";
 import {
   markProcessSubstitutions,
@@ -431,7 +438,13 @@ export class Interpreter {
       !this.ctx.state.suppressVerbose &&
       node.sourceText
     ) {
-      statementOutput.append("stderr", `${node.sourceText}\n`);
+      statementOutput.appendResult(
+        emitLive(this.ctx, {
+          stdout: "",
+          stderr: `${node.sourceText}\n`,
+          exitCode: 0,
+        }),
+      );
     }
     let exitCode = 0;
     let lastExecutedIndex = -1;
@@ -445,7 +458,7 @@ export class Interpreter {
         if (operator === "&&" && exitCode !== 0) continue;
         if (operator === "||" && exitCode === 0) continue;
 
-        const result = await this.executePipeline(pipeline);
+        const result = emitLive(this.ctx, await this.executePipeline(pipeline));
         // Decode each pipeline's stdout to text via its explicit `stdoutKind`
         // before concatenating, so a statement that joins text-shaped and
         // byte-shaped pipelines with && / || does not interleave raw byte and
@@ -460,6 +473,7 @@ export class Interpreter {
         this.ctx.state.env.set("?", String(exitCode));
       }
     } catch (error) {
+      emitLiveError(this.ctx, error);
       statementOutput.prependTo(error);
       throw error;
     }
@@ -520,20 +534,21 @@ export class Interpreter {
       await releaseProcessSubstitutions(this.ctx, procSubMark).catch(
         () => undefined,
       );
+      emitLiveError(this.ctx, error);
       throw error;
     }
     const writer = await releaseProcessSubstitutions(this.ctx, procSubMark);
-    if (!writer.stdout && !writer.stderr) return result;
+    if (!writer.stdout && !writer.stderr) return emitLive(this.ctx, result);
     // A `>(cmd)` writer shares the shell's stdout and stderr in bash; append
     // what it produced once the outer command has finished writing to it.
-    return {
+    return emitLive(this.ctx, {
       ...result,
       stdout: writer.stdout
         ? latin1FromBytes(stdoutAsBytes(result)) + writer.stdout
         : result.stdout,
       stdoutKind: writer.stdout ? "bytes" : result.stdoutKind,
       stderr: result.stderr + writer.stderr,
-    };
+    });
   }
 
   private async executeCommandInner(
@@ -830,7 +845,7 @@ export class Interpreter {
       commandName !== "" &&
       !(commandName === "exec" && (args.length === 0 || args[0] === "--"));
     const execute = async (
-      ran?: (result: ExecResult) => void,
+      ran?: (result: ExecResult, streamed: StreamedBytes) => void,
     ): Promise<ExecResult> => {
       const transaction = createRedirectionTransaction(
         this.ctx,
@@ -923,6 +938,7 @@ export class Interpreter {
 
       let cmdResult: ExecResult;
       let controlFlowError: BreakError | ContinueError | null = null;
+      const emittedBefore = emittedBytes(this.ctx.state);
 
       try {
         cmdResult = await this.dispatchCommand(
@@ -945,7 +961,7 @@ export class Interpreter {
           throw error;
         }
       }
-      ran?.(cmdResult);
+      ran?.(cmdResult, streamedSince(this.ctx.state, emittedBefore));
 
       // Commands without stdin access leave descriptor input untouched. `read`
       // advances its source exactly in consumeInput.
@@ -1088,8 +1104,9 @@ export class Interpreter {
     return this.commandHook(
       { name: commandName, args: [...args], cwd: this.ctx.state.cwd },
       async (ran) => {
+        const emittedBefore = emittedBytes(this.ctx.state);
         const result = await run();
-        ran(result);
+        ran(result, streamedSince(this.ctx.state, emittedBefore));
         return result;
       },
     );

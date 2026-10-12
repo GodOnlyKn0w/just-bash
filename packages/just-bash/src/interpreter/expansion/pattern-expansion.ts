@@ -10,6 +10,7 @@ import { Parser } from "../../parser/parser.js";
 import { ExecutionLimitError, ExitError } from "../errors.js";
 import { cloneArrays } from "../helpers/array.js";
 import { recordSubstitutionExit } from "../helpers/substitution-status.js";
+import { withCapturedOutput } from "../live-output.js";
 import type { InterpreterContext } from "../types.js";
 import { escapeGlobChars } from "./glob-escape.js";
 
@@ -126,7 +127,7 @@ async function executeCommandSubstitutionFromString(
   ctx.state.suppressVerbose = true;
 
   try {
-    const result = await ctx.executeScript(ast);
+    const result = await withCapturedOutput(ctx, () => ctx.executeScript(ast));
     // Restore environment but preserve exit code
     const exitCode = result.exitCode;
     ctx.state.env = savedEnv;

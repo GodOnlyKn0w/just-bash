@@ -48,6 +48,7 @@ import {
 } from "./fd-table.js";
 import { checkReadonlyError } from "./helpers/readonly.js";
 import { result as makeResult } from "./helpers/result.js";
+import { captureOutput } from "./live-output.js";
 import {
   effectiveRedirectFd,
   isNumericFdRedirection,
@@ -960,6 +961,17 @@ async function prepareRedirectionsWithState(
   return base();
 }
 
+/** Whether a redirection can change where output goes: every operator but the ones that only supply input. */
+function redirectsOutput(redirection: RedirectionNode): boolean {
+  const operator = redirection.operator;
+  return (
+    operator !== "<" &&
+    operator !== "<<" &&
+    operator !== "<<-" &&
+    operator !== "<<<"
+  );
+}
+
 export function createRedirectionTransaction(
   ctx: InterpreterContext,
   redirections: RedirectionNode[],
@@ -975,12 +987,28 @@ export function createRedirectionTransaction(
     policy,
   };
   let finished = false;
+  let restoreOutput: (() => void) | undefined;
   return {
-    prepare: (inheritedStdin = "") =>
-      prepareRedirectionsWithState(ctx, redirections, inheritedStdin, state),
+    prepare: (inheritedStdin = "") => {
+      // The command's output goes through these redirections before any of
+      // it is top-level output, so the command returns all of it.
+      if (redirections.some(redirectsOutput)) {
+        restoreOutput ??= captureOutput(ctx.state, {
+          stdout: true,
+          stderr: true,
+        });
+      }
+      return prepareRedirectionsWithState(
+        ctx,
+        redirections,
+        inheritedStdin,
+        state,
+      );
+    },
     finish: () => {
       if (finished) return;
       finished = true;
+      restoreOutput?.();
       if (policy !== "persistent") {
         restoreFds(ctx, state.numericSnapshot);
       }

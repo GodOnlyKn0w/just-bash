@@ -15,6 +15,7 @@ import type { ExecResult } from "../types.js";
 import { BadSubstitutionError, ErrexitError, ExitError } from "./errors.js";
 import { clearArray, cloneArrays, setArrayElement } from "./helpers/array.js";
 import { OK } from "./helpers/result.js";
+import { captureOutput } from "./live-output.js";
 import type { InterpreterContext } from "./types.js";
 
 /**
@@ -91,6 +92,14 @@ export async function executePipeline(
 
     let result: ExecResult;
     const outputCheckpoint = ctx.executionScope.outputBytesUsed;
+    // The pipe takes the standard output of every stage but the last, and
+    // with `|&` its standard error as well.
+    const restoreOutput = isLast
+      ? undefined
+      : captureOutput(ctx.state, {
+          stdout: true,
+          stderr: node.pipeStderr?.[i] ?? false,
+        });
     try {
       ctx.state.commandCount = ctx.executionScope.chargeCommand();
       result = await executeCommand(command, stdin);
@@ -129,6 +138,7 @@ export async function executePipeline(
         throw error;
       }
     } finally {
+      restoreOutput?.();
       if (isMultiCommandPipeline) {
         // The first stage held the shell's stdin, so whatever it consumed
         // (a `read` builtin advances the position, `true` does not) is now

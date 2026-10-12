@@ -106,6 +106,8 @@ export {
   isArray,
 } from "./expansion/variable.js";
 
+import { withCapturedOutput } from "./live-output.js";
+
 // Helper to fully expand word parts (including variables, arithmetic, etc.)
 async function expandWordPartsAsync(
   ctx: InterpreterContext,
@@ -825,7 +827,9 @@ async function expandPart(
       const savedSuppressVerbose = ctx.state.suppressVerbose;
       ctx.state.suppressVerbose = true;
       try {
-        const result = await ctx.executeScript(part.body);
+        const result = await withCapturedOutput(ctx, () =>
+          ctx.executeScript(part.body),
+        );
         // Restore environment but preserve exit code
         const exitCode = result.exitCode;
         ctx.state.env = savedEnv;

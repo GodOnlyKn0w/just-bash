@@ -40,6 +40,7 @@ import { MountableFs } from "../fs/mountable-fs/index.js";
 import type { ExecResult } from "../types.js";
 import { ExecutionLimitError, ExitError } from "./errors.js";
 import { cloneArrays } from "./helpers/array.js";
+import { withCapturedOutput } from "./live-output.js";
 import type { InterpreterContext } from "./types.js";
 
 /**
@@ -282,7 +283,7 @@ async function runBody(
 
   let result: ExecResult;
   try {
-    result = await ctx.executeScript(body);
+    result = await withCapturedOutput(ctx, () => ctx.executeScript(body));
   } catch (error) {
     // Safety limits always propagate.
     if (error instanceof ExecutionLimitError) throw error;

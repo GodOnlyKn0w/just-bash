@@ -61,16 +61,29 @@ export interface CommandHookCall {
 }
 
 /**
+ * The bytes that a command wrote while it ran to the `onOutput` of the
+ * execution. A function, `eval`, or `source` writes the output of its inner
+ * commands this way, and its result holds the rest of its output.
+ */
+export interface StreamedBytes {
+  readonly stdoutBytes: number;
+  readonly stderrBytes: number;
+}
+
+/**
  * Runs around every command the interpreter runs: builtins, functions, and
  * registered commands, each pipeline stage, and commands that other commands
  * start. `run` runs the command together with the redirections written on
  * it and returns or throws what the shell does; once the command itself has
- * run, `run` passes its result, before redirections, to `ran`. A command
- * whose redirections fail does not run and `ran` is not called.
+ * run, `run` passes to `ran` its result before redirections and the bytes
+ * it streamed. A command whose redirections fail does not run and `ran` is
+ * not called.
  */
 export type CommandHook = (
   command: CommandHookCall,
-  run: (ran: (result: ExecResult) => void) => Promise<ExecResult>,
+  run: (
+    ran: (result: ExecResult, streamed: StreamedBytes) => void,
+  ) => Promise<ExecResult>,
 ) => Promise<ExecResult>;
 
 /** Result from BashEnv.exec() - always includes env */

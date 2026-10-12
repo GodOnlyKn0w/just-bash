@@ -51,6 +51,7 @@ import {
   type InterpreterOptions,
   type InterpreterState,
 } from "./interpreter/index.js";
+import { type OutputTarget, outputTarget } from "./interpreter/live-output.js";
 import {
   type ExecutionLimitProfile,
   type ExecutionLimits,
@@ -265,6 +266,24 @@ export interface ExecOptions {
    * positional parameters ($1, $2, "$@", etc.).
    */
   args?: string[];
+  /**
+   * Receives the top-level output of the execution while it runs: the bytes
+   * that the script writes to its own standard output and standard error,
+   * without the output that a pipe, a command substitution, a process
+   * substitution, or a redirection takes. Text-shaped output is encoded as
+   * UTF-8 and byte-shaped output keeps its bytes.
+   *
+   * The output of a simple command arrives when the command ends, before the
+   * next command starts, and a message of the shell arrives when the step
+   * that produced it ends. Chunks arrive in the order the script produced
+   * them, and all of them arrive before `exec` settles. A function, `eval`,
+   * `source`, and a compound command hand over the output of each inner
+   * command this way, unless an output redirection is written on them: then
+   * their output arrives as one chunk when they end.
+   *
+   * With `onOutput`, `stdout` and `stderr` of the result are empty strings.
+   */
+  onOutput?: (stream: "stdout" | "stderr", bytes: Uint8Array) => void;
 }
 
 export class Bash {
@@ -550,6 +569,10 @@ export class Bash {
     options?: ExecOptions,
   ): Promise<BashExecResult> {
     const executionScope = new ExecutionScope(this.limits, options?.signal);
+    const output =
+      options?.onOutput === undefined
+        ? undefined
+        : outputTarget(options.onOutput);
     let result: BashExecResult;
     try {
       result = await this.execInScope(
@@ -560,6 +583,8 @@ export class Bash {
         options?.signal,
         false, // stdinAlreadyAccounted
         false, // defer result logging until cleanup finalizes the result
+        undefined,
+        output,
       );
     } catch (error) {
       // Cleanup must not hide the original execution failure.
@@ -583,6 +608,14 @@ export class Bash {
         exitCode: 126,
       };
     }
+    if (output !== undefined) {
+      // What the result still holds was produced outside a command: a syntax
+      // error, or the message of the error that ended the execution.
+      output.emit("stdout", new TextEncoder().encode(finalResult.stdout));
+      output.emit("stderr", new TextEncoder().encode(finalResult.stderr));
+      const emptied = { ...finalResult, stdout: "", stderr: "" };
+      return commandLine.trim() ? this.logResult(emptied) : emptied;
+    }
     return commandLine.trim() ? this.logResult(finalResult) : finalResult;
   }
 
@@ -595,6 +628,7 @@ export class Bash {
     stdinAlreadyAccounted = false,
     shouldLogResult = true,
     callerState?: InterpreterState,
+    output?: OutputTarget,
   ): Promise<BashExecResult> {
     const finishResult = (result: BashExecResult): BashExecResult =>
       shouldLogResult ? this.logResult(result) : result;
@@ -750,6 +784,10 @@ export class Bash {
         ),
         // Cooperative cancellation signal (used by timeout command)
         signal: effectiveOptions.signal,
+        liveOutput:
+          output === undefined
+            ? undefined
+            : { target: output, stdout: true, stderr: true },
         // Extra arguments injected directly into first command's arg list
         extraArgs: effectiveOptions.args,
       };

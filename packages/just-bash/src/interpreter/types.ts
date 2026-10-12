@@ -17,6 +17,7 @@ import type {
   ExecResult,
   TraceCallback,
 } from "../types.js";
+import type { LiveOutput } from "./live-output.js";
 import type { ProcessSubstitutionEntry } from "./process-substitution.js";
 
 export type InterpreterExecOptions = Omit<CommandExecOptions, "cwd"> & {
@@ -455,6 +456,13 @@ export interface InterpreterState
    * Checked at statement boundaries; when aborted, execution stops.
    */
   signal?: AbortSignal;
+  /**
+   * The streams whose output, at the current point of the script, is
+   * top-level output of an execution that hands its output over while it
+   * runs. Undefined when neither stream is, and in an execution that returns
+   * its output in its result.
+   */
+  liveOutput?: LiveOutput;
   /** Extra arguments injected via exec({ args }), appended to first command's args */
   extraArgs?: string[];
 }

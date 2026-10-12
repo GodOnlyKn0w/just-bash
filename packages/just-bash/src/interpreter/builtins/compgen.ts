@@ -39,6 +39,7 @@ import {
   hasArray,
 } from "../helpers/array.js";
 import { failure, result, success } from "../helpers/result.js";
+import { withCapturedOutput } from "../live-output.js";
 import type { InterpreterContext } from "../types.js";
 
 const preserveWordlistEscapes = (part: WordPart): WordPart => {
@@ -624,7 +625,9 @@ export async function handleCompgen(
     try {
       // Parse and execute the command
       const ast = parse(commandString);
-      const cmdResult = await ctx.executeScript(ast);
+      const cmdResult = await withCapturedOutput(ctx, () =>
+        ctx.executeScript(ast),
+      );
 
       // Check for errors
       if (cmdResult.exitCode !== 0) {
