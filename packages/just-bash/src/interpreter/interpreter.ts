@@ -33,6 +33,7 @@ import { mapToRecord } from "../helpers/env.js";
 import type { ExecutionLimits } from "../limits.js";
 import { ParseException } from "../parser/types.js";
 import type {
+  CommandHook,
   CommandRegistry,
   ExecResult,
   FeatureCoverageWriter,
@@ -139,12 +140,16 @@ export interface InterpreterOptions {
     argsJson: string,
     abortSignal: AbortSignal,
   ) => Promise<string>;
+  /** Runs around every command; see CommandHook. */
+  commandHook?: CommandHook;
 }
 
 export class Interpreter {
   private ctx: InterpreterContext;
+  private readonly commandHook?: CommandHook;
 
   constructor(options: InterpreterOptions, state: InterpreterState) {
+    this.commandHook = options.commandHook;
     this.ctx = {
       state,
       fs: options.fs,
@@ -1040,7 +1045,7 @@ export class Interpreter {
     return cmdResult;
   }
 
-  private async runCommand(
+  private runCommand(
     commandName: string,
     args: string[],
     quotedArgs: boolean[],
@@ -1049,6 +1054,34 @@ export class Interpreter {
     useDefaultPath = false,
     stdinSourceFd = -1,
     stdinRedirected = false,
+  ): Promise<ExecResult> {
+    const run = () =>
+      this.dispatchCommand(
+        commandName,
+        args,
+        quotedArgs,
+        stdin,
+        skipFunctions,
+        useDefaultPath,
+        stdinSourceFd,
+        stdinRedirected,
+      );
+    if (this.commandHook === undefined) return run();
+    return this.commandHook(
+      { name: commandName, args: [...args], cwd: this.ctx.state.cwd },
+      run,
+    );
+  }
+
+  private async dispatchCommand(
+    commandName: string,
+    args: string[],
+    quotedArgs: boolean[],
+    stdin: string,
+    skipFunctions: boolean,
+    useDefaultPath: boolean,
+    stdinSourceFd: number,
+    stdinRedirected: boolean,
   ): Promise<ExecResult> {
     const dispatchCtx: BuiltinDispatchContext = {
       ctx: this.ctx,

@@ -96,6 +96,8 @@ export type {
   BashExecResult,
   Command,
   CommandContext,
+  CommandHook,
+  CommandHookCall,
   ExecResult,
   IFileSystem,
   ResolvedCommandContext,

@@ -60,6 +60,24 @@ export interface ExecResult {
   };
 }
 
+/** A command about to run, as given to a CommandHook. */
+export interface CommandHookCall {
+  readonly name: string;
+  /** Expanded arguments, without the command name. */
+  readonly args: readonly string[];
+  readonly cwd: string;
+}
+
+/**
+ * Runs around every command the interpreter runs: builtins, functions, and
+ * registered commands, each pipeline stage, and commands that other commands
+ * start. `run` runs the command; the hook returns or throws what it does.
+ */
+export type CommandHook = (
+  command: CommandHookCall,
+  run: () => Promise<ExecResult>,
+) => Promise<ExecResult>;
+
 /** Result from BashEnv.exec() - always includes env */
 export interface BashExecResult extends ExecResult {
   env: Record<string, string>;

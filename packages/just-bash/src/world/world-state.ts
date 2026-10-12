@@ -4,6 +4,9 @@ import type { FsEntry } from "../fs/interface.js";
 import { contentVersion, type WorldVersionEntry } from "./interface.js";
 import type { SnapshotStore } from "./snapshot-store.js";
 
+/** The entry each changed path had before the changes; undefined when it had none. */
+export type PriorEntries = Map<string, FsEntry | undefined>;
+
 /** One row of a tree object: name, kind (f file, d directory, l symlink), mode, and the content version, tree id, or link target. */
 type TreeRow = [name: string, kind: "f" | "d" | "l", mode: number, ref: string];
 
@@ -52,6 +55,7 @@ export class WorldState {
   /** Tree ids of directories unchanged since their tree was computed. */
   private readonly trees = new Map<string, string>();
   private readonly contentVersions = new WeakMap<Uint8Array, string>();
+  private tracking: PriorEntries | undefined;
 
   constructor(store: SnapshotStore, maxTotalBytes?: number) {
     this.store = store;
@@ -62,6 +66,9 @@ export class WorldState {
   }
 
   private entryChanged(path: string, entry: FsEntry | undefined): void {
+    if (this.tracking !== undefined && !this.tracking.has(path)) {
+      this.tracking.set(path, this.entries.get(path));
+    }
     if (entry === undefined) {
       this.entries.delete(path);
       this.children.delete(path);
@@ -90,18 +97,59 @@ export class WorldState {
   /** The content version of a file entry, storing its bytes. */
   private fileVersion(entry: FsEntry & { type: "file" }): string {
     const bytes = contentBytes(entry);
+    const version = this.versionOf(bytes);
+    this.store.put("content", version, bytes);
+    return version;
+  }
+
+  /**
+   * Runs operation and gives the prior entries of the paths it changed to
+   * done, also when it throws. Tracking nests: an operation that starts while
+   * another is suspended at an await is tracked on its own, provided it does
+   * not await itself.
+   */
+  track<T>(operation: () => T, done: (prior: PriorEntries) => void): T {
+    const outer = this.tracking;
+    const prior: PriorEntries = new Map();
+    this.tracking = prior;
+    try {
+      return operation();
+    } finally {
+      this.tracking = outer;
+      done(prior);
+    }
+  }
+
+  /**
+   * track for an operation that awaits. The caller runs one such operation at
+   * a time; synchronous operations may run while it is suspended.
+   */
+  async trackAsync<T>(
+    operation: () => Promise<T>,
+    done: (prior: PriorEntries) => void,
+  ): Promise<T> {
+    const prior: PriorEntries = new Map();
+    this.tracking = prior;
+    try {
+      return await operation();
+    } finally {
+      this.tracking = undefined;
+      done(prior);
+    }
+  }
+
+  /** Content version of bytes, remembered for the same array. */
+  versionOf(bytes: Uint8Array): string {
     let version = this.contentVersions.get(bytes);
     if (version === undefined) {
       version = contentVersion(bytes);
       this.contentVersions.set(bytes, version);
     }
-    this.store.put("content", version, bytes);
     return version;
   }
 
-  /** Content version of the file at path; undefined when path is not a file. */
-  contentVersionAt(path: string): string | undefined {
-    const entry = this.entries.get(path);
+  /** Content version of a file entry, storing its bytes; undefined for other entries. */
+  versionOfEntry(entry: FsEntry | undefined): string | undefined {
     return entry?.type === "file" ? this.fileVersion(entry) : undefined;
   }
 

@@ -295,6 +295,12 @@ export class InMemoryFs implements IFileSystem {
   ): void {
     validatePath(path, "write");
     const normalized = this.resolvePathWithSymlinks(path);
+    if (this.data.get(normalized)?.type === "directory") {
+      throw fsError(
+        "EISDIR",
+        `EISDIR: illegal operation on a directory, open '${path}'`,
+      );
+    }
     this.ensureParentDirs(normalized);
 
     // Store content - convert to Uint8Array for internal storage
@@ -577,9 +583,10 @@ export class InMemoryFs implements IFileSystem {
 
   /**
    * Resolve symlinks in intermediate path components only (not the final component).
-   * Used by lstat which should not follow the final symlink.
+   * Used by lstat which should not follow the final symlink, and by the
+   * operations that act on a link itself.
    */
-  private resolveIntermediateSymlinks(path: string): string {
+  resolveIntermediateSymlinks(path: string): string {
     const normalized = normalizePath(path);
     if (normalized === "/") return "/";
 
@@ -854,6 +861,26 @@ export class InMemoryFs implements IFileSystem {
   }
 
   async rm(path: string, options?: RmOptions): Promise<void> {
+    this.rmSync(path, options);
+  }
+
+  /** Names of the entries directly inside a directory path. */
+  private childNames(directory: string): string[] {
+    const prefix = directory === "/" ? "/" : `${directory}/`;
+    const names: string[] = [];
+    for (const p of this.data.keys()) {
+      if (p !== directory && p.startsWith(prefix)) {
+        const rest = p.slice(prefix.length);
+        if (!rest.includes("/")) names.push(rest);
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Synchronous version of rm
+   */
+  rmSync(path: string, options?: RmOptions): void {
     validatePath(path, "rm");
     const normalized = this.resolveIntermediateSymlinks(path);
     const entry = this.data.get(normalized);
@@ -867,7 +894,7 @@ export class InMemoryFs implements IFileSystem {
     }
 
     if (entry.type === "directory") {
-      const children = await this.readdir(normalized);
+      const children = this.childNames(normalized);
       if (children.length > 0) {
         if (!options?.recursive) {
           throw fsError(
@@ -877,7 +904,7 @@ export class InMemoryFs implements IFileSystem {
         }
         for (const child of children) {
           const childPath = joinPath(normalized, child);
-          await this.rm(childPath, options);
+          this.rmSync(childPath, options);
         }
       }
     }
@@ -999,9 +1026,11 @@ export class InMemoryFs implements IFileSystem {
       );
     }
 
-    entry.mode = mode;
-    // Store the same entry again so observers see the mode change.
-    this.data.set(normalized, entry);
+    // Replace the entry rather than mutate it, so observers holding the
+    // previous entry still see its previous mode. The identity stays.
+    const changed = { ...entry, mode };
+    this.entryIdentities.set(changed, this.identityFor(entry));
+    this.data.set(normalized, changed);
   }
 
   // Create a symbolic link

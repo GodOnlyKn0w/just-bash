@@ -67,6 +67,7 @@ import type {
 import type {
   BashExecResult,
   Command,
+  CommandHook,
   CommandRegistry,
   FeatureCoverageWriter,
   RuntimeCommand,
@@ -210,6 +211,8 @@ export interface BashOptions {
    * When provided, interpreter emits coverage hits for analysis.
    */
   coverage?: FeatureCoverageWriter;
+  /** Runs around every command; see CommandHook. */
+  commandHook?: CommandHook;
   /**
    * Virtual process info for sandboxed environment.
    * Overrides the default virtual PID/UID values exposed via $$, $PPID, $UID, $EUID, $BASHPID,
@@ -281,6 +284,7 @@ export class Bash {
   private traceFn?: TraceCallback;
   private logger?: BashLogger;
   private coverageWriter?: FeatureCoverageWriter;
+  private commandHook?: CommandHook;
   private jsBootstrapCode?: string;
   private invokeToolFn?: (
     path: string,
@@ -345,6 +349,8 @@ export class Bash {
 
     // Store coverage writer if provided (for fuzzing instrumentation)
     this.coverageWriter = options.coverage;
+
+    this.commandHook = options.commandHook;
 
     // Initialize interpreter state
     this.state = {
@@ -809,6 +815,7 @@ export class Bash {
             sleep: this.sleepFn,
             trace: this.traceFn,
             coverage: this.coverageWriter,
+            commandHook: this.commandHook,
             jsBootstrapCode: this.jsBootstrapCode,
             invokeTool: this.invokeToolFn,
           };
