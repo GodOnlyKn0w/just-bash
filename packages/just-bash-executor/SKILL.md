@@ -558,7 +558,5 @@ Run these checks in order. Stop at the first failure.
 ## §10. Cross-references
 
 - [`README.md`](./README.md) — conceptual overview, configuration reference
-- [`examples/executor-tools/`](../../examples/executor-tools/) — runnable
-  end-to-end examples (`inline-tools.ts`, `multi-turn-discovery.ts`)
 - [`@executor-js/sdk`](https://www.npmjs.com/package/@executor-js/sdk) —
   upstream SDK whose plugins drive discovery

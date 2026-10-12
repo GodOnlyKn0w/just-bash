@@ -6,7 +6,6 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
-      "**/examples/**",
       "**/.pnpm-store/**",
     ],
     pool: "threads",

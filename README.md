@@ -1,6 +1,6 @@
 # just-bash monorepo
 
-This repository hosts the [`just-bash`](./packages/just-bash) package and its examples.
+This repository hosts the [`just-bash`](./packages/just-bash) package.
 
 <p>
   <a href="https://vercel.com/labs#labs-products"><img alt="Vercel Labs Product" src="https://img.shields.io/badge/LABS-PRODUCT-0a0a0a.svg?style=for-the-badge&amp;logo=Vercel&amp;labelColor=000000" height="28"></a>
@@ -21,7 +21,6 @@ See the package's own [README](./packages/just-bash/README.md) for usage documen
 
 ```
 packages/         publishable npm packages
-examples/         example consumers (bash-agent, cjs-consumer, website)
 .github/          CI workflows
 ```
 

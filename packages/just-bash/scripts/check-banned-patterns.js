@@ -724,7 +724,6 @@ const SKIP_DIRS = new Set([
 
 const SKIP_PATH_PATTERNS = [
   /(^|\/)\.pnpm-store(\/|$)/,
-  /(^|\/)examples\/website\/app\/api\/agent\/_agent-data(\/|$)/,
   /(^|\/)\.deepsec(\/|$)/,
   /(^|\/)todo(\/|$)/,
   /(^|\/)findings?(\/|$)/,

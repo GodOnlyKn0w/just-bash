@@ -67,6 +67,11 @@
     }
   },
   "devDependencies": {
+    "@executor-js/plugin-graphql": "^0.2.1",
+    "@executor-js/plugin-mcp": "^0.2.1",
+    "@executor-js/plugin-openapi": "^0.2.1",
+    "@executor-js/sdk": "^0.2.1",
+    "just-bash": "workspace:*",
     "@types/node": "^25.9.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"

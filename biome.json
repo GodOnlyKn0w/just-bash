@@ -55,7 +55,6 @@
       "!**/node_modules",
       "!**/coverage",
       "!**/*.md",
-      "!examples",
       "!**/*.parsed.json",
       "!.claude",
       "!.pnpm-store",

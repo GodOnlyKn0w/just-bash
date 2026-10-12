@@ -15,7 +15,6 @@
     "test:comparison": "pnpm --filter './packages/*' test:comparison",
     "test:comparison:record": "pnpm --filter './packages/*' test:comparison:record",
     "test:dist": "pnpm --filter './packages/*' test:dist",
-    "test:examples": "pnpm --filter cjs-consumer-example typecheck",
     "check:worker-sync": "pnpm --filter just-bash check:worker-sync",
     "check:deepsec-revalidation": "node scripts/check-deepsec-revalidation.mjs",
     "dev:exec": "pnpm --filter just-bash dev:exec",

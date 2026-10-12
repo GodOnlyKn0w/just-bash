@@ -354,11 +354,6 @@ Pass `exposeToolsAsCommands: false` to `createExecutor` if you only want the
 | `onElicitation` | `"accept-all" \| fn` | Elicitation hook (default: decline) |
 | `exposeToolsAsCommands` | `boolean` | Register tools as bash commands (default: `true`) |
 
-## Examples
-
-See [`examples/executor-tools/`](../../examples/executor-tools/) for runnable
-examples (`inline-tools.ts`, `multi-turn-discovery.ts`).
-
 ## How `invokeTool` works
 
 The bridge between QuickJS (where your script runs) and the host (where your

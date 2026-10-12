@@ -34,9 +34,3 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-      - name: Typecheck bash-agent example
-        run: pnpm --filter bash-agent-example typecheck
-
-      - name: Typecheck cjs-consumer example
-        run: pnpm --filter cjs-consumer-example typecheck

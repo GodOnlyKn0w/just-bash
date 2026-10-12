@@ -17,19 +17,12 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Spawn `node` from the example consumer's directory — that's where the
- * @executor-js/* packages are installed alongside @just-bash/executor and
- * just-bash, so Node's package resolution sees the same view a real consumer
- * would.
+ * Spawn `node` from this package's directory — the @executor-js/* packages
+ * and just-bash are installed here as devDependencies, and @just-bash/executor
+ * resolves to this package's built `dist/` through its own `exports`, so Node's
+ * package resolution sees the same view a real consumer would.
  */
-const CWD = path.join(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "examples",
-  "executor-tools",
-);
+const CWD = path.join(import.meta.dirname, "..");
 
 interface RunResult {
   status: number | null;
