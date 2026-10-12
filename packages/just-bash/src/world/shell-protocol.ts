@@ -1,7 +1,8 @@
 /**
  * Messages between a world and the worker its shell runs in. The world holds
- * the files; the worker asks for every file system operation and reports each
- * command invocation when it ends. A run is one exec or job.
+ * the files; the worker asks for every file system operation, reports each
+ * command invocation when it ends, and sends each chunk of a run's output
+ * when the shell hands it over. A run is one exec or job.
  */
 import type { FsMethod } from "./world-files.js";
 
@@ -51,10 +52,15 @@ export type FromShell =
       readonly stderrBytes: number;
     }
   | {
+      /** One chunk of the run's standard output or standard error, in the order the shell produced them. */
+      readonly type: "output";
+      readonly run: number;
+      readonly bytes: Uint8Array;
+    }
+  | {
+      /** The run ended; every `output` message of the run was sent before it. */
       readonly type: "done";
       readonly run: number;
-      readonly stdout: string;
-      readonly stderr: string;
       readonly exitCode: number;
     }
   | {

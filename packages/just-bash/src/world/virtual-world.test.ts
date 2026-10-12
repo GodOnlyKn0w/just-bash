@@ -474,3 +474,129 @@ describe("shell worker", () => {
     await backend.close();
   }, 20000);
 });
+
+describe("output", () => {
+  /** Runs command and records each chunk, and at settlement the number of chunks received before it. */
+  async function chunksOf(
+    backend: WorldBackend,
+    command: string,
+    signal = new AbortController().signal,
+  ): Promise<{ chunks: Buffer[]; before: number; exit: unknown }> {
+    const chunks: Buffer[] = [];
+    const { exit } = await backend.exec(command, {
+      execution: tool,
+      signal,
+      onOutput: (chunk) => chunks.push(chunk),
+    });
+    const before = chunks.length;
+    // A chunk that arrived after settlement would be delivered by now.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return { chunks, before, exit };
+  }
+
+  it("delivers the bytes the shell wrote, in order, before exec settles", async () => {
+    const { backend } = await world();
+    const bytes = await chunksOf(backend, "printf '\\xff\\xfe\\n'; echo é");
+    expect(bytes.chunks.map((chunk) => chunk.toString("hex"))).toEqual([
+      "fffe0a",
+      "c3a90a",
+    ]);
+    expect(bytes.before).toBe(2);
+    const order = await chunksOf(backend, "echo a; echo b >&2; echo c");
+    expect(order.chunks.map(String)).toEqual(["a\n", "b\n", "c\n"]);
+    expect(order.before).toBe(3);
+    const hidden = await chunksOf(
+      backend,
+      "x=$(echo hidden); echo shown | cat > f; echo visible",
+    );
+    expect(hidden.chunks.map(String)).toEqual(["visible\n"]);
+  });
+
+  it("delivers each chunk while the command runs", async () => {
+    const { backend } = await world();
+    const times: number[] = [];
+    const start = performance.now();
+    await backend.exec("for i in 1 2 3; do echo $i; sleep 0.2; done", {
+      execution: tool,
+      signal: new AbortController().signal,
+      onOutput: () => times.push(performance.now() - start),
+    });
+    const end = performance.now() - start;
+    expect(times).toHaveLength(3);
+    expect(times[1] - times[0]).toBeGreaterThan(150);
+    expect(times[2] - times[1]).toBeGreaterThan(150);
+    expect(end - times[2]).toBeGreaterThan(150);
+  });
+
+  it("delivers the output before an abort ends a cooperative command", async () => {
+    const { backend } = await world();
+    // The first run starts the worker, which takes longer than the delay
+    // of the abort below.
+    await run(backend, "true");
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 300);
+    const { chunks, before, exit } = await chunksOf(
+      backend,
+      "echo a; sleep 100",
+      stop.signal,
+    );
+    expect(exit).toEqual({ signal: "SIGTERM" });
+    expect(chunks[0]?.toString()).toBe("a\n");
+    expect(before).toBe(chunks.length);
+  }, 20000);
+
+  it("delivers the output before the worker of a command that ignores an abort is terminated", async () => {
+    const { backend } = await world();
+    await run(backend, "true");
+    const stop = new AbortController();
+    const chunks: string[] = [];
+    let atAbort = -1;
+    setTimeout(() => {
+      atAbort = chunks.length;
+      stop.abort();
+    }, 300);
+    const { exit } = await backend.exec("echo a; while true; do :; done", {
+      execution: tool,
+      signal: stop.signal,
+      onOutput: (chunk) => chunks.push(chunk.toString()),
+    });
+    expect(exit).toEqual({ signal: "SIGKILL" });
+    expect(chunks).toEqual(["a\n"]);
+    expect(atAbort).toBe(1);
+  }, 20000);
+
+  it("delivers the output of a job while the job runs", async () => {
+    const { backend } = await world();
+    const chunks: string[] = [];
+    let ended = false;
+    const job = await backend.startJob("echo started; sleep 100", {
+      execution: { ...tool, jobId: "job-b" },
+      onOutput: (chunk) => chunks.push(chunk.toString()),
+    });
+    void job.ended.then(() => {
+      ended = true;
+    });
+    await expect.poll(() => chunks).toEqual(["started\n"]);
+    expect(ended).toBe(false);
+    await job.kill();
+    expect((await job.ended).exit).toEqual({ signal: "SIGTERM" });
+  }, 20000);
+
+  it("counts in a command invocation the bytes its inner commands delivered", async () => {
+    const { backend, reports } = await world();
+    await run(backend, "f() { echo out; echo err >&2; }; f");
+    const invoked = reports.filter((report) => report.type === "invoked");
+    expect(
+      invoked.map(({ name, stdoutBytes, stderrBytes }) => [
+        name,
+        stdoutBytes,
+        stderrBytes,
+      ]),
+    ).toEqual([
+      ["echo", 4, 0],
+      // The bytes of a command count where it wrote them, before `>&2`.
+      ["echo", 4, 0],
+      ["f", 4, 4],
+    ]);
+  });
+});

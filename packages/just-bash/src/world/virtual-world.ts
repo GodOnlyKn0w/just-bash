@@ -292,10 +292,8 @@ class VirtualWorld implements WorldBackend {
     onOutput: (chunk: Buffer) => void,
     signal: AbortSignal,
   ): Promise<WorldExit> {
-    const result = await this.shell.run(command, execution, signal);
+    const result = await this.shell.run(command, execution, onOutput, signal);
     if ("terminated" in result) return { signal: "SIGKILL" };
-    if (result.stdout.length > 0) onOutput(Buffer.from(result.stdout, "utf8"));
-    if (result.stderr.length > 0) onOutput(Buffer.from(result.stderr, "utf8"));
     return signal.aborted ? { signal: "SIGTERM" } : { code: result.exitCode };
   }
 

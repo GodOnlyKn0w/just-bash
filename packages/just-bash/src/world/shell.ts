@@ -9,13 +9,9 @@ import {
 } from "./shell-protocol.js";
 import type { WorldFiles } from "./world-files.js";
 
-/** How a run ended: the shell's result, or the worker was terminated after an abort before the run ended. */
+/** How a run ended: the shell's exit code, or the worker was terminated after an abort before the run ended. */
 export type RunEnd =
-  | {
-      readonly stdout: string;
-      readonly stderr: string;
-      readonly exitCode: number;
-    }
+  | { readonly exitCode: number }
   | { readonly terminated: true };
 
 /** How long an aborted run may take to end before its worker is terminated. */
@@ -24,6 +20,7 @@ const ABORT_GRACE_MS = 2000;
 interface Run {
   readonly execution: WorldExecution;
   readonly worker: Worker;
+  readonly onOutput: (chunk: Buffer) => void;
   end(end: RunEnd | Error): void;
 }
 
@@ -87,10 +84,16 @@ export class Shell {
     worker.postMessage(message);
   }
 
-  /** Runs command for execution. Rejects when the worker fails for another reason than an abort. */
+  /**
+   * Runs command for execution. Each chunk of the command's standard output
+   * and standard error goes to onOutput when the shell hands it over, in the
+   * order the shell produced them, and before the returned promise settles.
+   * Rejects when the worker fails for another reason than an abort.
+   */
   run(
     command: string,
     execution: WorldExecution,
+    onOutput: (chunk: Buffer) => void,
     signal: AbortSignal,
   ): Promise<RunEnd> {
     this.worker ??= this.spawn();
@@ -105,6 +108,7 @@ export class Shell {
       this.runs.set(id, {
         execution,
         worker,
+        onOutput,
         end: (end) => {
           clearTimeout(timer);
           signal.removeEventListener("abort", abort);
@@ -170,12 +174,16 @@ export class Shell {
         ...invocation,
         execution: { ...run.execution, commandId },
       });
+    } else if (message.type === "output") {
+      run?.onOutput(
+        Buffer.from(
+          message.bytes.buffer,
+          message.bytes.byteOffset,
+          message.bytes.byteLength,
+        ),
+      );
     } else if (message.type === "done") {
-      run?.end({
-        stdout: message.stdout,
-        stderr: message.stderr,
-        exitCode: message.exitCode,
-      });
+      run?.end({ exitCode: message.exitCode });
     } else {
       run?.end(deserializeError(message.error));
     }

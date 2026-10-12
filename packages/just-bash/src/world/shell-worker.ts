@@ -7,7 +7,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { parentPort, workerData } from "node:worker_threads";
 import { Bash } from "../Bash.js";
 import { utf8ByteLength } from "../encoding.js";
-import type { ExecResult } from "../types.js";
+import type { ExecResult, StreamedBytes } from "../types.js";
 import {
   deserializeError,
   type FromShell,
@@ -87,11 +87,19 @@ const bash = new Bash({
         // The command's own result counts; without one (its redirections
         // failed) the shell's result does.
         let own: ExecResult | undefined;
-        const result = await run((ran) => {
+        let streamed: StreamedBytes = { stdoutBytes: 0, stderrBytes: 0 };
+        const result = await run((ran, ranStreamed) => {
           own = ran;
+          streamed = ranStreamed;
         });
         exitCode = (own ?? result).exitCode;
-        if (own !== undefined) bytes = outputBytes(own);
+        if (own !== undefined) {
+          const returned = outputBytes(own);
+          bytes = {
+            stdoutBytes: returned.stdoutBytes + streamed.stdoutBytes,
+            stderrBytes: returned.stderrBytes + streamed.stderrBytes,
+          };
+        }
         return result;
       } catch (error) {
         const code = (error as { exitCode?: unknown } | null)?.exitCode;
@@ -121,15 +129,12 @@ async function execute(run: number, command: string): Promise<void> {
   runs.set(run, stop);
   try {
     const result = await scopes.run({ run }, () =>
-      bash.exec(command, { signal: stop.signal }),
+      bash.exec(command, {
+        signal: stop.signal,
+        onOutput: (_stream, bytes) => post({ type: "output", run, bytes }),
+      }),
     );
-    post({
-      type: "done",
-      run,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-    });
+    post({ type: "done", run, exitCode: result.exitCode });
   } catch (error) {
     post({ type: "failed", run, error: serializeError(error) });
   } finally {
