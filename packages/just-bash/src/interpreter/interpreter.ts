@@ -824,220 +824,243 @@ export class Interpreter {
       quotedArgs.shift();
     }
 
-    const transaction = createRedirectionTransaction(
-      this.ctx,
-      node.redirections,
-      commandName === "exec"
-        ? EXEC_REDIRECTION_POLICY
-        : SIMPLE_REDIRECTION_POLICY,
-    );
-    onTransaction(transaction);
-    const preparedRedirections = await transaction.prepare(stdin);
-    if (preparedRedirections.error) {
-      restoreTempAssignments();
-      if (!preparedRedirections.errorCause) {
-        transaction.finish();
-        return preparedRedirections.error;
+    // A command runs as one command invocation together with its
+    // redirections; a bare `exec` only changes the shell's descriptors.
+    const invocation =
+      commandName !== "" &&
+      !(commandName === "exec" && (args.length === 0 || args[0] === "--"));
+    const execute = async (
+      ran?: (result: ExecResult) => void,
+    ): Promise<ExecResult> => {
+      const transaction = createRedirectionTransaction(
+        this.ctx,
+        node.redirections,
+        commandName === "exec"
+          ? EXEC_REDIRECTION_POLICY
+          : SIMPLE_REDIRECTION_POLICY,
+      );
+      onTransaction(transaction);
+      const preparedRedirections = await transaction.prepare(stdin);
+      if (preparedRedirections.error) {
+        restoreTempAssignments();
+        if (!preparedRedirections.errorCause) {
+          transaction.finish();
+          return preparedRedirections.error;
+        }
+        return preparedRedirectionError(preparedRedirections);
       }
-      return preparedRedirectionError(preparedRedirections);
-    }
-    const stdinSourceFd = preparedRedirections.stdinSourceFd;
-    const stdinRedirected = preparedRedirections.stdin !== undefined;
-    if (preparedRedirections.stdin !== undefined) {
-      stdin = preparedRedirections.stdin;
-    }
+      const stdinSourceFd = preparedRedirections.stdinSourceFd;
+      const stdinRedirected = preparedRedirections.stdin !== undefined;
+      if (preparedRedirections.stdin !== undefined) {
+        stdin = preparedRedirections.stdin;
+      }
 
-    // Handle empty command name specially
-    // If the command word contains ONLY command substitutions/expansions and expands
-    // to empty, word-splitting removes the empty result. If there are args, the first
-    // arg becomes the command name. This matches bash behavior:
-    // - x=''; $x is a no-op (empty, no args)
-    // - x=''; $x Y runs command Y (empty command name, Y becomes command)
-    // - `true` X runs command X (since `true` outputs nothing)
-    // However, a literal empty string (like '') is "command not found".
-    if (!commandName) {
-      if (commandIsOnlyExpansions) {
-        // No args - treat as a no-op that reports the status of a command
-        // substitution in the word (`$(exit 42)` is 42) and 0 otherwise.
+      // Handle empty command name specially
+      // If the command word contains ONLY command substitutions/expansions and expands
+      // to empty, word-splitting removes the empty result. If there are args, the first
+      // arg becomes the command name. This matches bash behavior:
+      // - x=''; $x is a no-op (empty, no args)
+      // - x=''; $x Y runs command Y (empty command name, Y becomes command)
+      // - `true` X runs command X (since `true` outputs nothing)
+      // However, a literal empty string (like '') is "command not found".
+      if (!commandName) {
+        if (commandIsOnlyExpansions) {
+          // No args - treat as a no-op that reports the status of a command
+          // substitution in the word (`$(exit 42)` is 42) and 0 otherwise.
+          transaction.finish();
+          return result(
+            "",
+            "",
+            nullCommandExitStatus(this.ctx.state, node.redirections),
+          );
+        }
+        // Literal empty command name - command not found
         transaction.finish();
-        return result(
-          "",
-          "",
-          nullCommandExitStatus(this.ctx.state, node.redirections),
+        return failure("bash: : command not found\n", 127);
+      }
+
+      // Special handling for 'exec' with only redirections (no command to run)
+      // In this case, the redirections apply persistently to the shell
+      if (commandName === "exec" && (args.length === 0 || args[0] === "--")) {
+        // In bash, "exec" with only redirections does NOT persist prefix assignments
+        // This is the "special case of the special case" - unlike other special builtins
+        // (like ":"), exec without a command restores temp assignments
+        for (const [name, value] of tempAssignments) {
+          if (value === undefined) this.ctx.state.env.delete(name);
+          else this.ctx.state.env.set(name, value);
+        }
+        // Clear temp exported vars
+        if (this.ctx.state.tempExportedVars) {
+          for (const name of tempAssignments.keys()) {
+            this.ctx.state.tempExportedVars.delete(name);
+          }
+        }
+        transaction.finish();
+        return OK;
+      }
+
+      // Append extra args injected via exec({ args }) and consume them
+      if (this.ctx.state.extraArgs) {
+        const extraArgs = this.ctx.state.extraArgs;
+        this.ctx.state.extraArgs = undefined;
+        for (const extraArg of extraArgs) appendArgument(extraArg, true);
+      }
+
+      // Generate xtrace output before running the command
+      const xtraceOutput = await traceSimpleCommand(
+        this.ctx,
+        commandName,
+        args,
+      );
+
+      // Push tempEnvBindings onto the stack so unset can see them
+      // This allows `unset v` to reveal the underlying global value when
+      // v was set by a prefix assignment like `v=tempenv cmd`
+      if (tempAssignments.size > 0) {
+        this.ctx.state.tempEnvBindings = this.ctx.state.tempEnvBindings || [];
+        this.ctx.state.tempEnvBindings.push(new Map(tempAssignments));
+      }
+
+      let cmdResult: ExecResult;
+      let controlFlowError: BreakError | ContinueError | null = null;
+
+      try {
+        cmdResult = await this.dispatchCommand(
+          commandName,
+          args,
+          quotedArgs,
+          stdin,
+          false,
+          false,
+          stdinSourceFd,
+          stdinRedirected,
+        );
+      } catch (error) {
+        // For break/continue, we still need to apply redirections before propagating
+        // This handles cases like "break > file" where the file should be created
+        if (error instanceof BreakError || error instanceof ContinueError) {
+          controlFlowError = error;
+          cmdResult = OK; // break/continue have exit status 0
+        } else {
+          throw error;
+        }
+      }
+      ran?.(cmdResult);
+
+      // Commands without stdin access leave descriptor input untouched. `read`
+      // advances its source exactly in consumeInput.
+      if (stdinSourceFd >= 0 && commandName !== "read") {
+        advanceFd(
+          this.ctx,
+          stdinSourceFd,
+          cmdResult.internalStdinConsumed ?? 0,
         );
       }
-      // Literal empty command name - command not found
-      transaction.finish();
-      return failure("bash: : command not found\n", 127);
-    }
 
-    // Special handling for 'exec' with only redirections (no command to run)
-    // In this case, the redirections apply persistently to the shell
-    if (commandName === "exec" && (args.length === 0 || args[0] === "--")) {
-      // In bash, "exec" with only redirections does NOT persist prefix assignments
-      // This is the "special case of the special case" - unlike other special builtins
-      // (like ":"), exec without a command restores temp assignments
-      for (const [name, value] of tempAssignments) {
-        if (value === undefined) this.ctx.state.env.delete(name);
-        else this.ctx.state.env.set(name, value);
+      // Prepend xtrace output and any assignment warnings to stderr
+      const stderrPrefix = xtraceAssignmentOutput + xtraceOutput;
+      if (stderrPrefix) {
+        cmdResult = {
+          ...cmdResult,
+          stderr: stderrPrefix + cmdResult.stderr,
+        };
       }
-      // Clear temp exported vars
+
+      // Descriptors opened by number stay visible while output is delivered
+      // (`echo hi 4> log >&4`), then go away with the command.
+      cmdResult = await applyRedirections(
+        this.ctx,
+        cmdResult,
+        node.redirections,
+        preparedRedirections.targets,
+        preparedRedirections.dupSources,
+        preparedRedirections.standardRoutes,
+        cmdResult.internalProducerCommand ?? commandName,
+        cmdResult.internalProducerOmitsShellPrefix,
+      );
+      transaction.finish();
+
+      // If we caught a break/continue error, re-throw it after applying redirections
+      if (controlFlowError) {
+        throw controlFlowError;
+      }
+
+      // Update $_ to the last argument of this command (after expansion)
+      // If no arguments, $_ is set to the command name
+      // Special case: for declare/local/typeset with array assignments like "a=(1 2)",
+      // bash sets $_ to just the variable name "a", not the full "a=(1 2)"
+      if (args.length > 0) {
+        let lastArg = args[args.length - 1];
+        if (
+          (commandName === "declare" ||
+            commandName === "local" ||
+            commandName === "typeset") &&
+          /^[a-zA-Z_][a-zA-Z0-9_]*=\(/.test(lastArg)
+        ) {
+          // Extract just the variable name from array assignment
+          const match = lastArg.match(/^([a-zA-Z_][a-zA-Z0-9_]*)=\(/);
+          if (match) {
+            lastArg = match[1];
+          }
+        }
+        this.ctx.state.lastArg = lastArg;
+      } else {
+        this.ctx.state.lastArg = commandName;
+      }
+
+      // In POSIX mode, prefix assignments persist after special builtins
+      // e.g., `foo=bar :` leaves foo=bar in the environment
+      // Exception: `unset` and `eval` - bash doesn't apply POSIX temp binding persistence
+      // for these builtins when they modify the same variable as the temp binding
+      // In non-POSIX mode (bash default), temp assignments are always restored
+      const isPosixSpecialWithPersistence =
+        isPosixSpecialBuiltin(commandName) &&
+        commandName !== "unset" &&
+        commandName !== "eval";
+      const shouldRestoreTempAssignments =
+        !this.ctx.state.options.posix || !isPosixSpecialWithPersistence;
+
+      if (shouldRestoreTempAssignments) {
+        for (const [name, value] of tempAssignments) {
+          // Skip restoration if this variable was a local that was fully unset
+          // This implements bash's behavior where unsetting all local cells
+          // prevents the tempenv from being restored
+          if (this.ctx.state.fullyUnsetLocals?.has(name)) {
+            continue;
+          }
+          if (value === undefined) this.ctx.state.env.delete(name);
+          else this.ctx.state.env.set(name, value);
+        }
+      }
+
+      // Clear temp exported vars after command execution
       if (this.ctx.state.tempExportedVars) {
         for (const name of tempAssignments.keys()) {
           this.ctx.state.tempExportedVars.delete(name);
         }
       }
-      transaction.finish();
-      return OK;
-    }
 
-    // Append extra args injected via exec({ args }) and consume them
-    if (this.ctx.state.extraArgs) {
-      const extraArgs = this.ctx.state.extraArgs;
-      this.ctx.state.extraArgs = undefined;
-      for (const extraArg of extraArgs) appendArgument(extraArg, true);
-    }
-
-    // Generate xtrace output before running the command
-    const xtraceOutput = await traceSimpleCommand(this.ctx, commandName, args);
-
-    // Push tempEnvBindings onto the stack so unset can see them
-    // This allows `unset v` to reveal the underlying global value when
-    // v was set by a prefix assignment like `v=tempenv cmd`
-    if (tempAssignments.size > 0) {
-      this.ctx.state.tempEnvBindings = this.ctx.state.tempEnvBindings || [];
-      this.ctx.state.tempEnvBindings.push(new Map(tempAssignments));
-    }
-
-    let cmdResult: ExecResult;
-    let controlFlowError: BreakError | ContinueError | null = null;
-
-    try {
-      cmdResult = await this.runCommand(
-        commandName,
-        args,
-        quotedArgs,
-        stdin,
-        false,
-        false,
-        stdinSourceFd,
-        stdinRedirected,
-      );
-    } catch (error) {
-      // For break/continue, we still need to apply redirections before propagating
-      // This handles cases like "break > file" where the file should be created
-      if (error instanceof BreakError || error instanceof ContinueError) {
-        controlFlowError = error;
-        cmdResult = OK; // break/continue have exit status 0
-      } else {
-        throw error;
+      // Pop tempEnvBindings from the stack
+      if (tempAssignments.size > 0 && this.ctx.state.tempEnvBindings) {
+        this.ctx.state.tempEnvBindings.pop();
       }
-    }
 
-    // Commands without stdin access leave descriptor input untouched. `read`
-    // advances its source exactly in consumeInput.
-    if (stdinSourceFd >= 0 && commandName !== "read") {
-      advanceFd(this.ctx, stdinSourceFd, cmdResult.internalStdinConsumed ?? 0);
-    }
+      // Include any stderr from expansion errors
+      if (this.ctx.state.expansionStderr) {
+        cmdResult = {
+          ...cmdResult,
+          stderr: this.ctx.state.expansionStderr + cmdResult.stderr,
+        };
+        this.ctx.state.expansionStderr = "";
+      }
 
-    // Prepend xtrace output and any assignment warnings to stderr
-    const stderrPrefix = xtraceAssignmentOutput + xtraceOutput;
-    if (stderrPrefix) {
-      cmdResult = {
-        ...cmdResult,
-        stderr: stderrPrefix + cmdResult.stderr,
-      };
-    }
-
-    // Descriptors opened by number stay visible while output is delivered
-    // (`echo hi 4> log >&4`), then go away with the command.
-    cmdResult = await applyRedirections(
-      this.ctx,
-      cmdResult,
-      node.redirections,
-      preparedRedirections.targets,
-      preparedRedirections.dupSources,
-      preparedRedirections.standardRoutes,
-      cmdResult.internalProducerCommand ?? commandName,
-      cmdResult.internalProducerOmitsShellPrefix,
+      return cmdResult;
+    };
+    if (!invocation || this.commandHook === undefined) return execute();
+    return this.commandHook(
+      { name: commandName, args: [...args], cwd: this.ctx.state.cwd },
+      execute,
     );
-    transaction.finish();
-
-    // If we caught a break/continue error, re-throw it after applying redirections
-    if (controlFlowError) {
-      throw controlFlowError;
-    }
-
-    // Update $_ to the last argument of this command (after expansion)
-    // If no arguments, $_ is set to the command name
-    // Special case: for declare/local/typeset with array assignments like "a=(1 2)",
-    // bash sets $_ to just the variable name "a", not the full "a=(1 2)"
-    if (args.length > 0) {
-      let lastArg = args[args.length - 1];
-      if (
-        (commandName === "declare" ||
-          commandName === "local" ||
-          commandName === "typeset") &&
-        /^[a-zA-Z_][a-zA-Z0-9_]*=\(/.test(lastArg)
-      ) {
-        // Extract just the variable name from array assignment
-        const match = lastArg.match(/^([a-zA-Z_][a-zA-Z0-9_]*)=\(/);
-        if (match) {
-          lastArg = match[1];
-        }
-      }
-      this.ctx.state.lastArg = lastArg;
-    } else {
-      this.ctx.state.lastArg = commandName;
-    }
-
-    // In POSIX mode, prefix assignments persist after special builtins
-    // e.g., `foo=bar :` leaves foo=bar in the environment
-    // Exception: `unset` and `eval` - bash doesn't apply POSIX temp binding persistence
-    // for these builtins when they modify the same variable as the temp binding
-    // In non-POSIX mode (bash default), temp assignments are always restored
-    const isPosixSpecialWithPersistence =
-      isPosixSpecialBuiltin(commandName) &&
-      commandName !== "unset" &&
-      commandName !== "eval";
-    const shouldRestoreTempAssignments =
-      !this.ctx.state.options.posix || !isPosixSpecialWithPersistence;
-
-    if (shouldRestoreTempAssignments) {
-      for (const [name, value] of tempAssignments) {
-        // Skip restoration if this variable was a local that was fully unset
-        // This implements bash's behavior where unsetting all local cells
-        // prevents the tempenv from being restored
-        if (this.ctx.state.fullyUnsetLocals?.has(name)) {
-          continue;
-        }
-        if (value === undefined) this.ctx.state.env.delete(name);
-        else this.ctx.state.env.set(name, value);
-      }
-    }
-
-    // Clear temp exported vars after command execution
-    if (this.ctx.state.tempExportedVars) {
-      for (const name of tempAssignments.keys()) {
-        this.ctx.state.tempExportedVars.delete(name);
-      }
-    }
-
-    // Pop tempEnvBindings from the stack
-    if (tempAssignments.size > 0 && this.ctx.state.tempEnvBindings) {
-      this.ctx.state.tempEnvBindings.pop();
-    }
-
-    // Include any stderr from expansion errors
-    if (this.ctx.state.expansionStderr) {
-      cmdResult = {
-        ...cmdResult,
-        stderr: this.ctx.state.expansionStderr + cmdResult.stderr,
-      };
-      this.ctx.state.expansionStderr = "";
-    }
-
-    return cmdResult;
   }
 
   private runCommand(
@@ -1064,7 +1087,11 @@ export class Interpreter {
     if (this.commandHook === undefined) return run();
     return this.commandHook(
       { name: commandName, args: [...args], cwd: this.ctx.state.cwd },
-      run,
+      async (ran) => {
+        const result = await run();
+        ran(result);
+        return result;
+      },
     );
   }
 

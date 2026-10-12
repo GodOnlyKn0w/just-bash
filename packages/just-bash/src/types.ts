@@ -63,11 +63,14 @@ export interface CommandHookCall {
 /**
  * Runs around every command the interpreter runs: builtins, functions, and
  * registered commands, each pipeline stage, and commands that other commands
- * start. `run` runs the command; the hook returns or throws what it does.
+ * start. `run` runs the command together with the redirections written on
+ * it and returns or throws what the shell does; once the command itself has
+ * run, `run` passes its result, before redirections, to `ran`. A command
+ * whose redirections fail does not run and `ran` is not called.
  */
 export type CommandHook = (
   command: CommandHookCall,
-  run: () => Promise<ExecResult>,
+  run: (ran: (result: ExecResult) => void) => Promise<ExecResult>,
 ) => Promise<ExecResult>;
 
 /** Result from BashEnv.exec() - always includes env */

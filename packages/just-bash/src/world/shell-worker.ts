@@ -78,15 +78,20 @@ const bash = new Bash({
   javascript: settings.javascript,
   commandHook: (command, run) => {
     const scope = scopes.getStore();
-    if (scope === undefined) return run();
+    if (scope === undefined) return run(() => undefined);
     const commandId = `command-${settings.generation}-${++commands}`;
     return scopes.run({ run: scope.run, commandId }, async () => {
       let exitCode = 1;
       let bytes = { stdoutBytes: 0, stderrBytes: 0 };
       try {
-        const result = await run();
-        exitCode = result.exitCode;
-        bytes = outputBytes(result);
+        // The command's own result counts; without one (its redirections
+        // failed) the shell's result does.
+        let own: ExecResult | undefined;
+        const result = await run((ran) => {
+          own = ran;
+        });
+        exitCode = (own ?? result).exitCode;
+        if (own !== undefined) bytes = outputBytes(own);
         return result;
       } catch (error) {
         const code = (error as { exitCode?: unknown } | null)?.exitCode;

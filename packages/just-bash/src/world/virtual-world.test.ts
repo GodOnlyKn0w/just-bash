@@ -125,17 +125,24 @@ describe("command observation", () => {
     ]);
   });
 
-  it("attributes redirections to the shell and nested commands to their parent", async () => {
+  it("attributes a command's redirections to it and nested commands to their parent", async () => {
     const { backend, reports } = await world({ files: { x: "1" } });
-    await run(backend, "f() { cat x; }; f > y");
+    await run(backend, "f() { cat x; }; f > y; { cat x; } > z");
     const invoked = reports.filter((r) => r.type === "invoked");
-    expect(invoked.map((r) => r.name)).toEqual(["cat", "f"]);
+    expect(invoked.map((r) => r.name)).toEqual(["cat", "f", "cat"]);
     const [cat, f] = invoked;
     expect(cat.parentCommandId).toBe(f.execution.commandId);
     expect(f.parentCommandId).toBeUndefined();
-    const change = reports.find((r) => r.type === "changed");
-    expect(change).toMatchObject({ path: "/work/y", kind: "create" });
-    expect(change?.execution).toEqual(tool);
+    // f wrote 1 byte to its standard output, which the redirection sent to y.
+    expect(f.stdoutBytes).toBe(1);
+    const changes = reports.filter((r) => r.type === "changed");
+    expect(changes.map((r) => [r.path, r.execution])).toEqual([
+      ["/work/y", f.execution],
+      ["/work/y", f.execution],
+      // A redirection on a compound command is outside every invocation.
+      ["/work/z", tool],
+      ["/work/z", tool],
+    ]);
   });
 
   it("reports a failed read as a stat and the exit code of the command", async () => {
@@ -410,10 +417,10 @@ describe("shell worker", () => {
       exit: { signal: "SIGTERM" },
       residualKilled: false,
     });
-    expect(reports.find((r) => r.type === "changed")?.execution).toEqual({
-      ...tool,
-      jobId: "job-a",
-    });
+    const { commandId, ...execution } =
+      reports.find((r) => r.type === "changed")?.execution ?? {};
+    expect(execution).toEqual({ ...tool, jobId: "job-a" });
+    expect(commandId).toBeDefined();
     await backend.close();
   }, 20000);
 });
