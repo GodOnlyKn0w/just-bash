@@ -7,7 +7,7 @@ import { Bash } from "../Bash.js";
  * Bash installs loop redirections in order, so a failing one leaves every
  * earlier redirection already applied: `done > out < nosuch` truncates `out`
  * and then fails, while `done < nosuch > out` fails first and never touches
- * `out`. Reported by the Vercel review bot on control-flow.ts:134.
+ * `out`.
  *
  * Every expectation here was measured against real bash before being written,
  * and is identical on /bin/bash 3.2.57 and /opt/homebrew/bin/bash 5.3.15.

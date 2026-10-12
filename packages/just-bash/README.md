@@ -380,33 +380,6 @@ execResult.metadata?.commands; // ["echo", "grep"]
 
 See [src/transform/README.md](src/transform/README.md) for the full API, built-in plugins, and how to write custom plugins.
 
-## Integrations
-
-### AI SDK Tool
-
-[`bash-tool`](https://github.com/vercel-labs/bash-tool) wraps just-bash as an [AI SDK](https://ai-sdk.dev/) tool:
-
-```bash
-npm install bash-tool
-```
-
-```typescript
-import { createBashTool } from "bash-tool";
-import { generateText } from "ai";
-
-const bashTool = createBashTool({
-  files: { "/data/users.json": '[{"name": "Alice"}, {"name": "Bob"}]' },
-});
-
-const result = await generateText({
-  model: "anthropic/claude-sonnet-4",
-  tools: { bash: bashTool },
-  prompt: "Count the users in /data/users.json",
-});
-```
-
-See [bash-tool](https://github.com/vercel-labs/bash-tool) for more.
-
 ## Execution Protection
 
 Bash protects against infinite loops and deep recursion with configurable limits:
@@ -451,7 +424,6 @@ The Node.js package requires Node `>=20.19`.
   bridge; guest JavaScript does not execute in the Node worker realm.
 - Execution is protected against infinite loops and deep recursion with configurable limits.
 - Node worker `resourceLimits` do not reliably cap the WebAssembly linear memory used by CPython or sql.js. Queue, deadline, file, database, bridge, and payload limits reduce exposure, but strong memory containment for these opt-in runtimes requires process/container isolation or a WASM build with a lower hard maximum.
-- Use [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) if you need a full VM with arbitrary binary execution.
 
 ## Browser Support
 
@@ -467,14 +439,6 @@ When created without options, Bash provides a Unix-like directory structure:
 - `/tmp` - Temporary files directory
 
 Commands can be invoked by path (e.g., `/bin/ls`) or by name.
-
-## AI Agent Instructions
-
-For AI agents, [`bash-tool`](https://github.com/vercel-labs/bash-tool) provides additional guidance in its `AGENTS.md`:
-
-```bash
-cat node_modules/bash-tool/dist/AGENTS.md
-```
 
 ## License
 

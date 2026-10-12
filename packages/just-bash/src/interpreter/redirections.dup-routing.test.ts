@@ -25,13 +25,13 @@ describe("fd duplication after redirection (> file 2>&1)", () => {
   });
 
   it("sends a custom command's stderr to the file", async () => {
-    const fail403 = defineCommand("vercel", async () => ({
+    const fail403 = defineCommand("deploy", async () => ({
       stdout: "",
       stderr: "Error! Forbidden (403)\n",
       exitCode: 1,
     }));
     const env = new Bash({ customCommands: [fail403] });
-    const result = await env.exec("vercel flags > /tmp/f 2>&1");
+    const result = await env.exec("deploy flags > /tmp/f 2>&1");
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe("");
     expect(result.exitCode).toBe(1);

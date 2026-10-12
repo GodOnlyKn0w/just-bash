@@ -16,31 +16,6 @@ A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when y
 - Execute shell commands without real filesystem access
 - Process text with standard Unix tools (grep, sed, awk, jq, etc.)
 
-## For AI Agents
-
-If you're building an AI agent that needs a bash tool, use [`bash-tool`](https://github.com/vercel-labs/bash-tool) which is optimized for just-bash:
-
-```sh
-npm install bash-tool
-```
-
-```typescript
-import { createBashTool } from "bash-tool";
-import { generateText } from "ai";
-
-const bashTool = createBashTool({
-  files: { "/data/users.json": '[{"name": "Alice"}, {"name": "Bob"}]' },
-});
-
-const result = await generateText({
-  model: "anthropic/claude-sonnet-4",
-  tools: { bash: bashTool },
-  prompt: "Count the users in /data/users.json",
-});
-```
-
-See the [bash-tool documentation](https://github.com/vercel-labs/bash-tool) for more details.
-
 ## Quick Reference
 
 ```typescript

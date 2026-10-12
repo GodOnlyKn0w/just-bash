@@ -5,8 +5,7 @@ import { Bash } from "../Bash.js";
  * A pipeline inherits the enclosing shell's stdin for its first stage and
  * must not consume it on the pipeline's behalf: running `true | true` reads
  * nothing, so a following `read` still sees the next line. Regression tests
- * for https://github.com/vercel-labs/just-bash/issues/323, where every
- * pipeline drained the shared stdin to EOF.
+ * for the bug where every pipeline drained the shared stdin to EOF.
  */
 
 const FIVE_LINES = "L1\nL2\nL3\nL4\nL5\n";

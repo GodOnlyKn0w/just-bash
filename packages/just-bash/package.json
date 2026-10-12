@@ -4,11 +4,11 @@
   "description": "A simulated bash environment with virtual filesystem",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel-labs/just-bash.git"
+    "url": "git+https://github.com/GodOnlyKn0w/just-bash.git"
   },
-  "homepage": "https://github.com/vercel-labs/just-bash#readme",
+  "homepage": "https://github.com/GodOnlyKn0w/just-bash#readme",
   "bugs": {
-    "url": "https://github.com/vercel-labs/just-bash/issues"
+    "url": "https://github.com/GodOnlyKn0w/just-bash/issues"
   },
   "type": "module",
   "engines": {

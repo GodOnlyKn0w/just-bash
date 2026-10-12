@@ -8,8 +8,7 @@ import {
 
 /**
  * A pipeline inherits the enclosing shell's stdin for its first stage only,
- * and never consumes it on the pipeline's behalf. Recorded against real bash
- * for https://github.com/vercel-labs/just-bash/issues/323.
+ * and never consumes it on the pipeline's behalf. Recorded against real bash.
  */
 
 const FIVE_LINES = "L1\nL2\nL3\nL4\nL5\n";

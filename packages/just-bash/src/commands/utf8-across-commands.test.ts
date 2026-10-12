@@ -3,8 +3,6 @@
  *
  * Verifies that non-ASCII characters (German umlauts, French accents, etc.)
  * are preserved correctly when flowing through various commands and file operations.
- *
- * Related: https://github.com/vercel-labs/just-bash/issues/131
  */
 import { describe, expect, it } from "vitest";
 import { Bash } from "../Bash.js";
