@@ -55,3 +55,26 @@ describe("InMemoryFs writes through symlinks", () => {
     expect(await fs.readlink("/link")).toBe("/target");
   });
 });
+
+describe("InMemoryFs links whose targets pass through links", () => {
+  it("reads, lists, and stats through a chain of links", async () => {
+    const fs = new InMemoryFs({ "/work/real/sub/f": "x" });
+    await fs.symlink("real", "/work/dir");
+    await fs.symlink("dir/sub/f", "/work/link");
+    await fs.symlink("dir/sub", "/work/sublink");
+    expect(await fs.readFile("/work/link")).toBe("x");
+    expect(await fs.readdir("/work/sublink")).toEqual(["f"]);
+    expect(await fs.readdir("/work/dir/sub")).toEqual(["f"]);
+    expect((await fs.stat("/work/link")).isFile).toBe(true);
+    expect(await fs.realpath("/work/link")).toBe("/work/real/sub/f");
+    expect((await fs.lstat("/work/link")).isSymbolicLink).toBe(true);
+  });
+
+  it("fails with ELOOP on a cycle of links", async () => {
+    const fs = new InMemoryFs();
+    await fs.symlink("/b", "/a");
+    await fs.symlink("/a", "/b");
+    await expect(fs.readFile("/a")).rejects.toMatchObject({ code: "ELOOP" });
+    await expect(fs.readdir("/a")).rejects.toMatchObject({ code: "ELOOP" });
+  });
+});

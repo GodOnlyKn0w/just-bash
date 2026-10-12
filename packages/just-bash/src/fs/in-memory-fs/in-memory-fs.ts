@@ -587,47 +587,9 @@ export class InMemoryFs implements IFileSystem {
    * operations that act on a link itself.
    */
   resolveIntermediateSymlinks(path: string): string {
-    const normalized = normalizePath(path);
-    if (normalized === "/") return "/";
-
-    const parts = normalized.slice(1).split("/");
-    if (parts.length <= 1) return normalized; // No intermediate components
-
-    let resolvedPath = "";
-    const seen = new Set<string>();
-
-    // Process all but the last component
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i];
-      resolvedPath = `${resolvedPath}/${part}`;
-
-      let entry = this.data.get(resolvedPath);
-      let loopCount = 0;
-      const maxLoops = MAX_SYMLINK_DEPTH;
-
-      while (entry && entry.type === "symlink" && loopCount < maxLoops) {
-        if (seen.has(resolvedPath)) {
-          throw fsError(
-            "ELOOP",
-            `ELOOP: too many levels of symbolic links, lstat '${path}'`,
-          );
-        }
-        seen.add(resolvedPath);
-        resolvedPath = resolveSymlinkTarget(resolvedPath, entry.target);
-        entry = this.data.get(resolvedPath);
-        loopCount++;
-      }
-
-      if (loopCount >= maxLoops) {
-        throw fsError(
-          "ELOOP",
-          `ELOOP: too many levels of symbolic links, lstat '${path}'`,
-        );
-      }
-    }
-
-    // Append the final component without resolving
-    return `${resolvedPath}/${parts[parts.length - 1]}`;
+    return this.resolveSymlinks(normalizePath(path), false, path, "lstat", {
+      links: 0,
+    });
   }
 
   /**
@@ -635,46 +597,54 @@ export class InMemoryFs implements IFileSystem {
    * For example: /home/user/linkdir/file.txt where linkdir is a symlink to "subdir"
    * would resolve to /home/user/subdir/file.txt
    */
-  private resolvePathWithSymlinks(path: string): string {
-    const normalized = normalizePath(path);
+  resolvePathWithSymlinks(path: string): string {
+    return this.resolveSymlinks(normalizePath(path), true, path, "open", {
+      links: 0,
+    });
+  }
+
+  /**
+   * Resolve the symlinks in a normalized path component by component. A
+   * link's target is resolved the same way, so a target that passes through
+   * other links reaches their targets. More than MAX_SYMLINK_DEPTH links in
+   * one resolution fail with ELOOP.
+   */
+  private resolveSymlinks(
+    normalized: string,
+    followLast: boolean,
+    path: string,
+    syscall: string,
+    count: { links: number },
+  ): string {
     if (normalized === "/") return "/";
-
     const parts = normalized.slice(1).split("/");
-    let resolvedPath = "";
-    const seen = new Set<string>();
-
-    for (const part of parts) {
-      resolvedPath = `${resolvedPath}/${part}`;
-
-      // Check if this path component is a symlink
-      let entry = this.data.get(resolvedPath);
-      let loopCount = 0;
-      const maxLoops = MAX_SYMLINK_DEPTH; // Prevent infinite loops
-
-      while (entry && entry.type === "symlink" && loopCount < maxLoops) {
-        if (seen.has(resolvedPath)) {
+    let resolved = "";
+    for (let index = 0; index < parts.length; index++) {
+      const candidate = `${resolved}/${parts[index]}`;
+      const entry = this.data.get(candidate);
+      if (
+        entry?.type === "symlink" &&
+        (followLast || index < parts.length - 1)
+      ) {
+        if (++count.links > MAX_SYMLINK_DEPTH) {
           throw fsError(
             "ELOOP",
-            `ELOOP: too many levels of symbolic links, open '${path}'`,
+            `ELOOP: too many levels of symbolic links, ${syscall} '${path}'`,
           );
         }
-        seen.add(resolvedPath);
-
-        // Resolve the symlink
-        resolvedPath = resolveSymlinkTarget(resolvedPath, entry.target);
-        entry = this.data.get(resolvedPath);
-        loopCount++;
-      }
-
-      if (loopCount >= maxLoops) {
-        throw fsError(
-          "ELOOP",
-          `ELOOP: too many levels of symbolic links, open '${path}'`,
+        const target = this.resolveSymlinks(
+          resolveSymlinkTarget(candidate, entry.target),
+          true,
+          path,
+          syscall,
+          count,
         );
+        resolved = target === "/" ? "" : target;
+      } else {
+        resolved = candidate;
       }
     }
-
-    return resolvedPath;
+    return resolved === "" ? "/" : resolved;
   }
 
   async mkdir(path: string, options?: MkdirOptions): Promise<void> {
@@ -800,29 +770,15 @@ export class InMemoryFs implements IFileSystem {
 
   async readdirWithFileTypes(path: string): Promise<DirentEntry[]> {
     validatePath(path, "scandir");
-    let normalized = normalizePath(path);
-    let entry = this.data.get(normalized);
-
-    if (!entry) {
-      throw fsError(
-        "ENOENT",
-        `ENOENT: no such file or directory, scandir '${path}'`,
-      );
-    }
-
-    // Follow symlinks to get to the actual directory
-    const seen = new Set<string>();
-    while (entry && entry.type === "symlink") {
-      if (seen.has(normalized)) {
-        throw fsError(
-          "ELOOP",
-          `ELOOP: too many levels of symbolic links, scandir '${path}'`,
-        );
-      }
-      seen.add(normalized);
-      normalized = resolveSymlinkTarget(normalized, entry.target);
-      entry = this.data.get(normalized);
-    }
+    // Follow every symlink on the path to get to the actual directory
+    const normalized = this.resolveSymlinks(
+      normalizePath(path),
+      true,
+      path,
+      "scandir",
+      { links: 0 },
+    );
+    const entry = this.data.get(normalized);
 
     if (!entry) {
       throw fsError(
