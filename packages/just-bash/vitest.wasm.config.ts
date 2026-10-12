@@ -1,8 +1,4 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
@@ -18,9 +14,7 @@ export default defineConfig({
     // vi.mock to replace node:worker_threads. They share module-level queue
     // state with real tests, so each file needs its own module instance.
     isolate: true,
-    setupFiles: [resolve(__dirname, "src/vitest-setup.ts")],
-    // WASM worker tests need process-level isolation because
-    // defense-in-depth patches globalThis which is shared across threads.
+    // WASM worker tests need process-level isolation.
     maxWorkers: 2,
     poolMatchGlobs: [
       ["forks", "**/python3*.test.ts"],

@@ -8,7 +8,6 @@
 import { BoundedStringBuilder } from "../../bounded-builder.js";
 import { mapToRecord } from "../../helpers/env.js";
 import { ExecutionLimitError } from "../../interpreter/errors.js";
-import { assertDefenseContext } from "../../security/defense-context.js";
 import type { FeatureCoverageWriter } from "../../types.js";
 import { utf8ByteLength } from "../printf/escapes.js";
 import {
@@ -126,8 +125,6 @@ export interface EvalContext {
   namedArgs?: Map<string, QueryValue>;
   /** Positional arguments (in order) exposed via $ARGS.positional */
   positionalArgs?: QueryValue[];
-  requireDefenseContext?: boolean;
-  defenseContextChecked?: boolean;
   /** Original document root for parent/root navigation */
   root?: QueryValue;
   /** Current path from root for parent navigation */
@@ -236,8 +233,6 @@ function createContext(options?: EvaluateOptions): EvalContext {
     namedArgs: options?.namedArgs,
     positionalArgs: options?.positionalArgs,
     coverage: options?.coverage,
-    requireDefenseContext: options?.requireDefenseContext,
-    defenseContextChecked: false,
     budget: options?.budget ?? { operations: 0, callDepth: 0 },
   };
 }
@@ -255,8 +250,6 @@ function withVar(
     env: ctx.env,
     namedArgs: ctx.namedArgs,
     positionalArgs: ctx.positionalArgs,
-    requireDefenseContext: ctx.requireDefenseContext,
-    defenseContextChecked: ctx.defenseContextChecked,
     root: ctx.root,
     currentPath: ctx.currentPath,
     funcs: ctx.funcs,
@@ -463,7 +456,6 @@ export interface EvaluateOptions {
   /** Positional arguments (in order) exposed via $ARGS.positional */
   positionalArgs?: QueryValue[];
   coverage?: FeatureCoverageWriter;
-  requireDefenseContext?: boolean;
   /** Reuse across multiple input documents to enforce one command budget. */
   budget?: QueryEvaluationBudget;
 }
@@ -514,15 +506,6 @@ export function evaluate(
     ctxOrOptions && "vars" in ctxOrOptions
       ? ctxOrOptions
       : createContext(ctxOrOptions as EvaluateOptions | undefined);
-
-  if (!ctx.defenseContextChecked) {
-    assertDefenseContext(
-      ctx.requireDefenseContext,
-      "query-engine",
-      "evaluation",
-    );
-    ctx = { ...ctx, defenseContextChecked: true };
-  }
 
   // Initialize root if not set (first evaluation)
   if (ctx.root === undefined) {

@@ -6,11 +6,6 @@
  *
  * Uses sql.js (WASM-based SQLite) which is fully sandboxed and cannot
  * access the real filesystem.
- *
- * Security: Uses phased defense-in-depth:
- * 1. Init phase: sql.js WASM loads without restrictions
- * 2. Defense phase: Activate full blocking after sql.js init
- * 3. Execute phase: User SQL runs with all dangerous globals blocked
  */
 
 import { parentPort, workerData } from "node:worker_threads";
@@ -20,10 +15,6 @@ import initSqlJs, {
   type Statement,
 } from "sql.js";
 import { sanitizeHostErrorMessage } from "../../fs/sanitize-error.js";
-import {
-  WorkerDefenseInDepth,
-  type WorkerDefenseStats,
-} from "../../security/index.js";
 import { sanitizeUnknownError } from "../../security/wasm-callback.js";
 
 const MIN_SQLITE_HEAP_LIMIT = 32 * 1024 * 1024;
@@ -31,9 +22,6 @@ const MAX_SQLITE_HEAP_LIMIT = 128 * 1024 * 1024;
 
 // Cached SQL.js module (initialized once)
 let cachedSQL: SqlJsStatic | null = null;
-
-// Defense instance (activated after sql.js init)
-let defense: WorkerDefenseInDepth | null = null;
 
 function wrapWorkerMessage(
   protocolToken: string,
@@ -69,7 +57,7 @@ function postWorkerMessage(protocolToken: string, message: unknown): void {
 }
 
 /**
- * Initialize sql.js and activate defense-in-depth.
+ * Initialize sql.js.
  * Called once per worker lifetime.
  */
 async function initializeSqlJs(): Promise<SqlJsStatic> {
@@ -77,21 +65,9 @@ async function initializeSqlJs(): Promise<SqlJsStatic> {
     return cachedSQL;
   }
 
-  // Initialize sql.js WASM first (needs unrestricted JS features). Database
-  // construction is also prewarmed before defense activation below because
-  // sql.js performs some Node module loading lazily on first use.
   cachedSQL = await initSqlJs();
 
   return cachedSQL;
-}
-
-function activateDefense(): void {
-  if (defense) return;
-  // Violations throw synchronously and are returned through the authenticated
-  // final response. Calling parentPort.postMessage from inside the loader trap
-  // can itself lazily load Node internals and recursively trigger the trap.
-  // @banned-pattern-ignore: constructor receives a static options bag, never dynamic keys
-  defense = new WorkerDefenseInDepth({});
 }
 
 export interface WorkerInput {
@@ -114,8 +90,6 @@ export interface WorkerSuccess {
   results: StatementResult[];
   hasModifications: boolean;
   dbBuffer: Uint8Array | null; // serialized db if modified
-  /** Defense-in-depth stats if enabled */
-  defenseStats?: WorkerDefenseStats;
 }
 
 export interface StatementResult {
@@ -128,8 +102,6 @@ export interface StatementResult {
 export interface WorkerError {
   success: false;
   error: string;
-  /** Defense-in-depth stats if enabled */
-  defenseStats?: WorkerDefenseStats;
 }
 
 export type WorkerOutput = WorkerSuccess | WorkerError;
@@ -283,25 +255,11 @@ async function executeQuery(data: WorkerInput): Promise<WorkerOutput> {
       ),
     );
     db.run(`PRAGMA hard_heap_limit = ${sqliteHeapLimit}`);
-    // Exercise the exact prepare/step/iterator paths used below while no guest
-    // SQL is present. sql.js lazily resolves a small amount of Node glue on
-    // first use even after initSqlJs() and Database construction complete.
-    const bootstrapIterator = db.iterateStatements("SELECT 1");
-    const bootstrapStatement = bootstrapIterator.next();
-    if (!bootstrapStatement.done) {
-      bootstrapStatement.value.step();
-      bootstrapStatement.value.free();
-    }
-    // All sql.js/Database bootstrap operations are complete. No guest SQL has
-    // run yet, so loader denial can now be activated without a guest callback
-    // ever executing inside a trusted bootstrap window.
-    activateDefense();
   } catch (e) {
     const message = sanitizeHostErrorMessage((e as Error).message);
     return {
       success: false,
       error: message,
-      defenseStats: defense?.getStats(),
     };
   }
 
@@ -397,7 +355,6 @@ async function executeQuery(data: WorkerInput): Promise<WorkerOutput> {
       results,
       hasModifications,
       dbBuffer: resultBuffer,
-      defenseStats: defense?.getStats(),
     };
   } catch (e) {
     db.close();
@@ -405,7 +362,6 @@ async function executeQuery(data: WorkerInput): Promise<WorkerOutput> {
     return {
       success: false,
       error: message,
-      defenseStats: defense?.getStats(),
     };
   }
 }
@@ -421,7 +377,6 @@ if (parentPort && workerData) {
       postWorkerMessage(input.protocolToken, {
         success: false,
         error: sanitizeUnknownError(error),
-        defenseStats: defense?.getStats(),
       });
     });
 }

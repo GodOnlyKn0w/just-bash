@@ -2,7 +2,6 @@
 // Each command has an explicit loader function for bundler compatibility (Next.js, etc.)
 
 import { raceCancellation } from "../abort-signals.js";
-import { DefenseInDepthBox } from "../security/defense-in-depth-box.js";
 import type {
   ExecResult,
   RuntimeCommand,
@@ -549,24 +548,14 @@ function createLazyCommand(def: LazyCommandDef): RuntimeCommand {
       let cmd = cache.get(def.name);
 
       if (!cmd) {
-        // Lazy imports run inside the defense-in-depth context.
-        // Module loading may access blocked globals (e.g., worker_threads
-        // uses SharedArrayBuffer, sql.js uses WebAssembly), so we suspend
-        // blocking during the import.
-        //
         // Loading is host work that cannot be cancelled, so give up on waiting
         // for it once this invocation is cancelled: holding the caller's cleanup
         // grace window open would make the cancelled command look like one that
-        // ignored cancellation. The trusted scope covers the wait, so giving up
-        // also releases it instead of leaving blocking suspended for work that
-        // runs afterwards. The import keeps running in the async context that
-        // was trusted for it.
-        cmd = await DefenseInDepthBox.runTrustedAsync(() =>
-          raceCancellation(
-            def.load(),
-            ctx.signal,
-            `bash: ${def.name} was cancelled before it started\n`,
-          ),
+        // ignored cancellation.
+        cmd = await raceCancellation(
+          def.load(),
+          ctx.signal,
+          `bash: ${def.name} was cancelled before it started\n`,
         );
         cache.set(def.name, cmd);
       }

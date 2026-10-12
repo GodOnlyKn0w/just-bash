@@ -152,11 +152,11 @@ describe("DeepSec follow-up interpreter resource limits", () => {
   });
 
   it("charges consumed pipeline intermediates before forwarding them", async () => {
-    const produce = defineCommand(
-      "produce",
-      async () => ({ stdout: "123456789", stderr: "", exitCode: 0 }),
-      { trusted: true },
-    );
+    const produce = defineCommand("produce", async () => ({
+      stdout: "123456789",
+      stderr: "",
+      exitCode: 0,
+    }));
     const bash = new Bash({
       customCommands: [produce],
       executionLimits: { maxOutputSize: 8 },

@@ -5,19 +5,13 @@
  * Security model: CPython Emscripten has zero JS bridge code.
  * `import js` fails with `ModuleNotFoundError` — the module doesn't exist.
  * `os.system()` is patched to no-op at Emscripten level.
- * No sandbox code needed — isolation is by construction.
- *
- * Defense-in-depth activates BEFORE CPython loads to block dangerous Node.js APIs.
+ * Sockets are the exception: see NETWORK_MODULES below.
  */
 
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
 import { sanitizeHostErrorMessage } from "../../fs/sanitize-error.js";
-import {
-  WorkerDefenseInDepth,
-  type WorkerDefenseStats,
-} from "../../security/index.js";
 import {
   sanitizeUnknownError,
   wrapWasmCallback,
@@ -41,109 +35,41 @@ export interface WorkerInput {
 export interface WorkerOutput {
   success: boolean;
   error?: string;
-  /** Defense-in-depth stats if enabled */
-  defenseStats?: WorkerDefenseStats;
 }
 
 const require = createRequire(import.meta.url);
-const CPYTHON_ENTRY_BASENAME = "/vendor/cpython-emscripten/python.cjs";
-const CPYTHON_STDLIB_BASENAME = "/vendor/cpython-emscripten/python313.zip";
-let moduleLoadGuardInstalled = false;
 
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/");
-}
-
-function isApprovedCpythonEntryPath(path: string): boolean {
-  return normalizePath(path).endsWith(CPYTHON_ENTRY_BASENAME);
-}
-
-function isApprovedStdlibZipPath(path: string): boolean {
-  return normalizePath(path).endsWith(CPYTHON_STDLIB_BASENAME);
-}
-
-function assertApprovedPath(
-  path: string,
-  kind: "cpython-entry" | "cpython-stdlib",
-): void {
-  const ok =
-    kind === "cpython-entry"
-      ? isApprovedCpythonEntryPath(path)
-      : isApprovedStdlibZipPath(path);
-  if (!ok) {
-    throw new Error(
-      `[Defense-in-depth] rejected ${kind} path outside approved vendor bundle: ${path}`,
-    );
+// The virtual environment has no network. Under Node, Emscripten's socket
+// layer opens real connections through the `ws` package whenever it can be
+// resolved, so this worker thread refuses to load it and the Node network
+// modules; Python socket calls then fail with an OSError.
+const NETWORK_MODULES = new Set([
+  "ws",
+  "net",
+  "node:net",
+  "tls",
+  "node:tls",
+  "dgram",
+  "node:dgram",
+  "dns",
+  "node:dns",
+  "http",
+  "node:http",
+  "https",
+  "node:https",
+  "http2",
+  "node:http2",
+]);
+const NodeModule = require("node:module") as {
+  _load: (request: string, ...rest: unknown[]) => unknown;
+};
+const loadModule = NodeModule._load;
+NodeModule._load = function (request: string, ...rest: unknown[]) {
+  if (NETWORK_MODULES.has(request)) {
+    throw new Error(`network access is not available: ${request}`);
   }
-}
-
-// Module._load protection: block dangerous require() calls at file load time,
-// BEFORE python.cjs is loaded. This closes the initialization window where
-// Emscripten callbacks could call require() unrestricted.
-// ESM imports (import { ... } from "...") are unaffected by Module._load.
-try {
-  const NodeModule = require("node:module") as {
-    _load: (request: string, ...args: unknown[]) => unknown;
-    _resolveFilename: (request: string, ...args: unknown[]) => unknown;
-  };
-  if (
-    typeof NodeModule._load === "function" &&
-    typeof NodeModule._resolveFilename === "function"
-  ) {
-    const originalLoad = NodeModule._load;
-    const originalResolveFilename = NodeModule._resolveFilename;
-    const blockedModules = new Set([
-      "child_process",
-      "node:child_process",
-      "cluster",
-      "node:cluster",
-      "dgram",
-      "node:dgram",
-      "dns",
-      "node:dns",
-      "net",
-      "node:net",
-      "tls",
-      "node:tls",
-      "vm",
-      "node:vm",
-      "v8",
-      "node:v8",
-      "inspector",
-      "node:inspector",
-      "inspector/promises",
-      "node:inspector/promises",
-      "trace_events",
-      "node:trace_events",
-      "perf_hooks",
-      "node:perf_hooks",
-      "worker_threads",
-      "node:worker_threads",
-    ]);
-    NodeModule._load = function (request: string, ...rest: unknown[]) {
-      if (blockedModules.has(request)) {
-        throw new Error(
-          `[Defense-in-depth] require('${request}') is blocked in worker context`,
-        );
-      }
-      return originalLoad.apply(this, [request, ...rest]);
-    };
-    NodeModule._resolveFilename = function (
-      request: string,
-      ...rest: unknown[]
-    ) {
-      if (blockedModules.has(request)) {
-        throw new Error(
-          `[Defense-in-depth] resolving '${request}' is blocked in worker context`,
-        );
-      }
-      return originalResolveFilename.apply(this, [request, ...rest]);
-    };
-    moduleLoadGuardInstalled = true;
-  }
-} catch {
-  /* best-effort */
-}
+  return loadModule.apply(this, [request, ...rest]);
+};
 
 let cpythonEntryPath: string;
 try {
@@ -156,11 +82,9 @@ try {
     dirname(import.meta.url).replace("file://", "") +
     "/../../../vendor/cpython-emscripten/python.cjs";
 }
-assertApprovedPath(cpythonEntryPath, "cpython-entry");
 
 const cpythonDir = dirname(cpythonEntryPath);
 const stdlibZipPath = `${cpythonDir}/python313.zip`;
-assertApprovedPath(stdlibZipPath, "cpython-stdlib");
 
 // Emscripten module types
 interface EmscriptenModule {
@@ -995,7 +919,7 @@ os.chdir('/host' + ${JSON.stringify(input.cwd)})
 `;
 }
 
-// Read stdlib zip at module load time (before defense-in-depth activates).
+// Read stdlib zip at module load time.
 import { readFileSync } from "node:fs";
 
 const cachedStdlibZip = new Uint8Array(readFileSync(stdlibZipPath));
@@ -1034,19 +958,10 @@ function postWorkerMessage(protocolToken: string, message: unknown): void {
 }
 
 async function runPython(input: WorkerInput): Promise<WorkerOutput> {
-  if (!moduleLoadGuardInstalled) {
-    return {
-      success: false,
-      error:
-        "Defense-in-depth module-loader guard failed to initialize; refusing to execute Python worker",
-    };
-  }
-
   const backend = new SyncBackend(input.sharedBuffer, input.timeoutMs);
 
   // Load the CPython Emscripten factory function
-  assertApprovedPath(cpythonEntryPath, "cpython-entry");
-  // @banned-pattern-ignore: path validated by assertApprovedPath allowlist above
+  // @banned-pattern-ignore: path resolved from the bundled vendor directory above
   const createPythonModule = require(cpythonEntryPath) as (
     config: Record<string, unknown>,
   ) => Promise<EmscriptenModule>;
@@ -1192,10 +1107,6 @@ sys.exit(_jb_exit_code)
 
   // Execute CPython with the script
   try {
-    // CPython, MEMFS, and HOSTFS bootstrap are now complete. Guest Python is
-    // not reachable until callMain, so activate loader denial at this exact
-    // boundary rather than authorizing loader calls by their stack text.
-    activateDefense(input.protocolToken);
     const ret = Module.callMain([scriptPath]);
     // callMain returns the exit code, or throws ExitStatus with EXIT_RUNTIME
     const exitCode =
@@ -1209,63 +1120,6 @@ sys.exit(_jb_exit_code)
     backend.exit(exitCode);
     return { success: true };
   }
-}
-
-// Defense-in-depth instance
-let defense: WorkerDefenseInDepth | null = null;
-
-/**
- * Activate defense-in-depth.
- * Called AFTER CPython WASM loads (WASM compilation needs unrestricted JS).
- * CPython Emscripten has no JS bridge, so fewer exclusions needed than Pyodide.
- */
-function activateDefense(protocolToken: string): void {
-  if (defense) return;
-
-  // Degrade performance to ms precision BEFORE defense activates.
-  // Emscripten's _emscripten_get_now() needs a working timer, but
-  // sub-ms precision enables timing side-channel attacks. Replacing
-  // with Date.now() gives Emscripten what it needs at safe resolution.
-  const _DateNow = Date.now;
-  const degraded = { now: () => _DateNow(), timeOrigin: _DateNow() };
-  Object.defineProperty(globalThis, "performance", {
-    value: degraded,
-    writable: true,
-    configurable: true,
-  });
-
-  const onViolation = wrapWasmCallback(
-    "python3-worker",
-    "onViolation",
-    (v: unknown) => {
-      postWorkerMessage(protocolToken, {
-        type: "security-violation",
-        violation: v,
-      });
-    },
-  );
-
-  defense = new WorkerDefenseInDepth({
-    excludeViolationTypes: [
-      // SharedArrayBuffer/Atomics: Used by sync-fs-backend.ts for synchronous
-      // filesystem communication between the WASM thread and the main thread.
-      "shared_array_buffer",
-      "atomics",
-      // performance: Excluded because we replaced it above with a ms-precision
-      // stub. Defense doesn't need to block it — it's already degraded.
-      "performance_timing",
-      // CPython's Emscripten runtime performs lazy CJS loads during callMain.
-      // A worker-entry guard installed before CPython loads rejects the exact
-      // dangerous builtin set without relying on loader stack text. CPython
-      // exposes no JS bridge to guest Python, so this compatibility exclusion
-      // does not make Module methods guest-reachable.
-      "module_load",
-      "module_resolve_filename",
-    ],
-    onViolation,
-  });
-  // Module._load protection is installed at file scope (top of file),
-  // before python.cjs loads, so it's already active here.
 }
 
 // Catch unhandled errors in the worker
@@ -1291,7 +1145,6 @@ if (parentPort) {
     activeProtocolToken = input.protocolToken;
     runPython(input)
       .then((result) => {
-        result.defenseStats = defense?.getStats();
         postWorkerMessage(input.protocolToken, result);
       })
       .catch((e) => {
@@ -1299,7 +1152,6 @@ if (parentPort) {
         postWorkerMessage(input.protocolToken, {
           success: false,
           error: message,
-          defenseStats: defense?.getStats(),
         });
       });
   }

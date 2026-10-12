@@ -29,8 +29,6 @@ describe("published package declarations", () => {
       const [pack] = JSON.parse(stdout) as PackResult[];
       const files = new Set(pack.files.map((file) => file.path));
 
-      expect(files.has("dist/security/index.d.ts")).toBe(true);
-      expect(files.has("dist/security/types.d.ts")).toBe(true);
       expect(files.has("dist/transform/pipeline.d.ts")).toBe(true);
       expect(files.has("dist/transform/plugins/command-collector.d.ts")).toBe(
         true,

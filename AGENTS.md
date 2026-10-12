@@ -39,5 +39,5 @@ Input Script → Parser (src/parser/) → AST (src/ast/) → Interpreter (src/in
 | `src/commands/python3/` | CPython compiled to WebAssembly, running in a worker thread. |
 | `src/commands/js-exec/` | Sandboxed JavaScript and TypeScript runtime built on QuickJS. |
 | `src/fs/` | Virtual filesystem: `in-memory-fs/` and `mountable-fs/`. |
-| `src/security/` | Defense-in-depth layers, execution limits, and the security test suite. |
+| `src/security/` | Security and resource-limit test suites, and WASM callback error sanitization. |
 | `src/comparison-tests/`, `src/spec-tests/` | Cross-checking suites: recorded bash fixtures, and bash specification conformance with known failures. |

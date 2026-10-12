@@ -57,13 +57,6 @@ pipes, redirections, and all shell features. The legacy `CommandContext` remains
 available for standalone context inputs; use `createCommandContext({ fs })` when
 calling a command directly with a fully resolved context.
 
-Host-provided commands preserve the legacy trusted default whether supplied to
-the `Bash` constructor, declared through `defineCommand`, loaded lazily, or
-added later with `bash.registerCommand()`. Set `trusted: false` (or use
-`defineCommand(name, execute, { trusted: false })`) to select the restricted
-extension boundary. Trusted commands run in the embedding process and should
-never execute guest-provided JavaScript.
-
 Every invocation is bound by `maxExecutionTimeMs`. On cancellation, just-bash
 revokes the command context immediately; `maxExtensionCleanupTimeMs` only
 bounds how long it waits for the now-authority-free command promise to settle.
@@ -457,23 +450,6 @@ The Node.js package requires Node `>=20.19`.
   primary isolation boundary is QuickJS plus the validated, bounded host
   bridge; guest JavaScript does not execute in the Node worker realm.
 - Execution is protected against infinite loops and deep recursion with configurable limits.
-- Host-realm defense-in-depth uses the strongest scoped controls available on
-  each supported Node runtime. Where `node:module.registerHooks()` is present,
-  builtin ESM imports can also be denied only for the untrusted async context;
-  older runtimes retain best-effort scoped protection without failing existing
-  applications. It never installs a process-global deny-all loader. Query the
-  resolved capabilities with `DefenseInDepthBox.getInstance().getStatus()`.
-  Audit mode reports `level: "none"` because it records violations without
-  enforcing them.
-- Scoped defense uses reversible proxies for `Reflect`, `JSON`, and `Math` and
-  restores their host descriptors on deactivation. This is reported as
-  `intrinsicProtection: "scoped-best-effort"`: same-realm JavaScript that
-  cached an intrinsic or a mutation function before activation cannot be fully
-  revoked (including the direct `delete` operator). The separately named
-  `processLifetimeIntrinsicHardening: true` option permanently freezes those
-  objects and locks selected well-known Symbol descriptors; use it only in a
-  disposable or process-lifetime realm. Use an isolated worker/process when
-  complete protection and reversible host state are both required.
 - Node worker `resourceLimits` do not reliably cap the WebAssembly linear memory used by CPython or sql.js. Queue, deadline, file, database, bridge, and payload limits reduce exposure, but strong memory containment for these opt-in runtimes requires process/container isolation or a WASM build with a lower hard maximum.
 - Use [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) if you need a full VM with arbitrary binary execution.
 

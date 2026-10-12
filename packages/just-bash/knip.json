@@ -4,8 +4,7 @@
   "ignore": [
     "src/**/*.test.ts",
     "src/spec-tests/**",
-    "src/banned-patterns-test.ts",
-    "src/security/fuzzing/**"
+    "src/banned-patterns-test.ts"
   ],
   "ignoreBinaries": ["tsx"],
   "rules": {

@@ -500,11 +500,6 @@ export interface InterpreterContext {
   /** Optional feature coverage writer for fuzzing instrumentation */
   coverage?: FeatureCoverageWriter;
   /**
-   * When true, interpreter execution must run inside DefenseInDepthBox
-   * sandbox async context. Used to fail closed on context-loss bugs.
-   */
-  requireDefenseContext?: boolean;
-  /**
    * Bootstrap JavaScript code for js-exec.
    * Threaded through the context chain instead of shell env.
    */

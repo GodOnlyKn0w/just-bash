@@ -34,19 +34,7 @@ describe("custom-commands", () => {
       }));
 
       expect(cmd.name).toBe("test");
-      expect(cmd.trusted).toBe(true);
       expect(typeof cmd.execute).toBe("function");
-    });
-
-    it("preserves trusted defaults and supports explicit untrusted commands", () => {
-      const execute = async () => ({ stdout: "", stderr: "", exitCode: 0 });
-      expect(defineCommand("compatible", execute).trusted).toBe(true);
-      expect(defineCommand("safe", execute, { trusted: false }).trusted).toBe(
-        false,
-      );
-      expect(defineCommand("trusted", execute, { trusted: true }).trusted).toBe(
-        true,
-      );
     });
 
     it("execute function receives args and ctx", async () => {
@@ -222,115 +210,6 @@ describe("custom-commands", () => {
         (await new Bash({ customCommands: [command] }).exec(command.name))
           .stdout,
       ).toBe("/home/user\n");
-    });
-
-    it.each([
-      "direct",
-      "helper",
-      "lazy",
-    ] as const)("preserves trusted execution by default for %s commands", async (kind) => {
-      const execute = async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1));
-        return { stdout: "ok\n", stderr: "", exitCode: 0 };
-      };
-      const command: CustomCommand =
-        kind === "direct"
-          ? { name: kind, execute }
-          : kind === "helper"
-            ? defineCommand(kind, execute)
-            : {
-                name: kind,
-                load: async () => ({ name: kind, execute }),
-              };
-
-      expect(
-        (await new Bash({ customCommands: [command] }).exec(kind)).stdout,
-      ).toBe("ok\n");
-    });
-
-    it.each([
-      "direct",
-      "helper",
-      "lazy",
-    ] as const)("supports explicit untrusted execution for %s commands", async (kind) => {
-      const execute = async () => {
-        setTimeout(() => {}, 1);
-        return { stdout: "unexpected\n", stderr: "", exitCode: 0 };
-      };
-      const command: CustomCommand =
-        kind === "direct"
-          ? { name: kind, trusted: false, execute }
-          : kind === "helper"
-            ? defineCommand(kind, execute, { trusted: false })
-            : {
-                name: kind,
-                trusted: false,
-                load: async () => ({ name: kind, execute }),
-              };
-      const bash = new Bash({ customCommands: [command] });
-
-      const result = await bash.exec(kind);
-
-      expect(result.exitCode).toBe(1);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("setTimeout is blocked");
-    });
-
-    it("lets a lazy command explicitly opt in to trusted execution", async () => {
-      const bash = new Bash({
-        customCommands: [
-          {
-            name: "trusted-lazy",
-            trusted: true,
-            load: async () => ({
-              name: "trusted-lazy",
-              execute: async () => {
-                await new Promise((resolve) => setTimeout(resolve, 1));
-                return { stdout: "ok\n", stderr: "", exitCode: 0 };
-              },
-            }),
-          },
-        ],
-      });
-
-      expect((await bash.exec("trusted-lazy")).stdout).toBe("ok\n");
-    });
-
-    it("preserves trusted execution for commands registered later", async () => {
-      const bash = new Bash();
-      bash.registerCommand({
-        name: "late-trusted-default",
-        execute: async () => {
-          await new Promise((resolve) => setTimeout(resolve, 1));
-          return { stdout: "ok\n", stderr: "", exitCode: 0 };
-        },
-      });
-
-      const result = await bash.exec("late-trusted-default");
-
-      expect(result).toMatchObject({
-        stdout: "ok\n",
-        stderr: "",
-        exitCode: 0,
-      });
-    });
-
-    it("allows commands registered later to opt into restriction", async () => {
-      const bash = new Bash();
-      bash.registerCommand({
-        name: "late-restricted",
-        trusted: false,
-        execute: async () => {
-          setTimeout(() => {}, 1);
-          return { stdout: "unexpected\n", stderr: "", exitCode: 0 };
-        },
-      });
-
-      const result = await bash.exec("late-restricted");
-
-      expect(result.exitCode).toBe(1);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("setTimeout is blocked");
     });
 
     it("registers and executes a simple custom command", async () => {

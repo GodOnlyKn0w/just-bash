@@ -11,7 +11,6 @@ import {
   stdoutAsBytes,
 } from "../encoding.js";
 import { relinquishPipelineOutput } from "../execution-scope.js";
-import { _performanceNow } from "../security/trusted-globals.js";
 import type { ExecResult } from "../types.js";
 import { BadSubstitutionError, ErrexitError, ExitError } from "./errors.js";
 import { clearArray, cloneArrays, setArrayElement } from "./helpers/array.js";
@@ -35,7 +34,7 @@ export async function executePipeline(
   executeCommand: ExecuteCommandFn,
 ): Promise<ExecResult> {
   // Record start time for timed pipelines
-  const startTime = node.timed ? _performanceNow() : 0;
+  const startTime = node.timed ? performance.now() : 0;
 
   let stdin = "";
   let lastResult: ExecResult = OK;
@@ -278,7 +277,7 @@ export async function executePipeline(
 
   // Output timing info for timed pipelines
   if (node.timed) {
-    const endTime = _performanceNow();
+    const endTime = performance.now();
     const elapsedSeconds = (endTime - startTime) / 1000;
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;

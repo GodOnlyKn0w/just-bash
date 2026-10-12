@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_BYTES } from "../../encoding.js";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
 import { resolveLimits } from "../../limits.js";
-import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import type { RuntimeCommandContext } from "../../types.js";
 import { _internals, sqlite3Command } from "./sqlite3.js";
 
@@ -78,26 +77,6 @@ describe("sqlite3 worker protocol abuse", () => {
     vi.restoreAllMocks();
   });
 
-  it("surfaces security-violation as explicit error with violation type", async () => {
-    vi.spyOn(_internals, "createWorker").mockImplementation((_path, input) => {
-      return createMockWorker((worker) => {
-        worker.emitAuthenticated("message", {
-          type: "security-violation",
-          violation: { type: "module_load" },
-        });
-      }, input.protocolToken) as never;
-    });
-
-    const result = await sqlite3Command.execute(
-      [":memory:", "SELECT 1"],
-      createContext(),
-    );
-
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("Security violation: module_load");
-    expect(result.exitCode).toBe(1);
-  });
-
   it("surfaces malformed success payloads as explicit command errors", async () => {
     vi.spyOn(_internals, "createWorker").mockImplementation((_path, input) => {
       return createMockWorker((worker) => {
@@ -155,31 +134,6 @@ describe("sqlite3 worker protocol abuse", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       "sqlite3: worker error: sqlite3 worker failed to load: bootstrap fault at <path> via <internal>:1234\n",
-    );
-    expect(result.exitCode).toBe(1);
-  });
-
-  it("fails closed if worker callback runs without defense async context", async () => {
-    vi.spyOn(DefenseInDepthBox, "isInSandboxedContext").mockReturnValue(false);
-    vi.spyOn(_internals, "createWorker").mockImplementation((_path, input) => {
-      return createMockWorker((worker) => {
-        worker.emitAuthenticated("message", {
-          success: true,
-          results: [],
-          hasModifications: false,
-          dbBuffer: null,
-        });
-      }, input.protocolToken) as never;
-    });
-
-    const result = await sqlite3Command.execute(
-      [":memory:", "SELECT 1"],
-      createContext({ requireDefenseContext: true }),
-    );
-
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toBe(
-      "sqlite3: sqlite3 worker message callback attempted outside defense context\n\nThis is a defense-in-depth measure and indicates a bug in just-bash. Please report this at security@vercel.com\n",
     );
     expect(result.exitCode).toBe(1);
   });

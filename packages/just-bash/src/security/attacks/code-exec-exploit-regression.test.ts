@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
-import { assertExecResultSafe } from "../fuzzing/oracles/assertions.js";
+import { assertExecResultSafe } from "./assertions.js";
 
 const fixturesDir = join(
   dirname(fileURLToPath(import.meta.url)),

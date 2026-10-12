@@ -2,11 +2,6 @@ import { decodeBytesToUtf8 } from "../../encoding.js";
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import { ExecutionLimitError } from "../../interpreter/errors.js";
 import type { ExecutionLimits } from "../../limits.js";
-import {
-  assertDefenseContext,
-  awaitWithDefenseContext,
-} from "../../security/defense-context.js";
-import { SecurityViolationError } from "../../security/defense-in-depth-box.js";
 import type {
   ExecResult,
   FeatureCoverageWriter,
@@ -77,7 +72,6 @@ interface ProcessContentOptions {
   fs?: RuntimeCommandContext["fs"];
   cwd?: string;
   coverage?: FeatureCoverageWriter;
-  requireDefenseContext?: boolean;
 }
 
 async function processContent(
@@ -86,14 +80,7 @@ async function processContent(
   silent: boolean,
   options: ProcessContentOptions = {},
 ): Promise<{ output: string; exitCode?: number; errorMessage?: string }> {
-  const { limits, filename, fs, cwd, coverage, requireDefenseContext } =
-    options;
-  assertDefenseContext(requireDefenseContext, "sed", "processing entry");
-  const withDefenseContext = <T>(
-    phase: string,
-    op: () => Promise<T>,
-  ): Promise<T> =>
-    awaitWithDefenseContext(requireDefenseContext, "sed", phase, op);
+  const { limits, filename, fs, cwd, coverage } = options;
 
   // Track if input ended with newline - needed for preserving trailing newline behavior
   const inputEndsWithNewline = content.endsWith("\n");
@@ -184,18 +171,12 @@ async function processContent(
           try {
             if (read.wholeFile) {
               // r command - read entire file, append after current line
-              const fileContent = await withDefenseContext(
-                "read command file",
-                () => fs.readFile(filePath),
-              );
+              const fileContent = await fs.readFile(filePath);
               state.appendBuffer.push(fileContent.replace(/\n$/, ""));
             } else {
               // R command - read one line from file
               if (!fileLineCache.has(filePath)) {
-                const fileContent = await withDefenseContext(
-                  "read command file line cache",
-                  () => fs.readFile(filePath),
-                );
+                const fileContent = await fs.readFile(filePath);
                 fileLineCache.set(filePath, fileContent.split("\n"));
                 fileLinePositions.set(filePath, 0);
               }
@@ -206,10 +187,7 @@ async function processContent(
                 fileLinePositions.set(filePath, pos + 1);
               }
             }
-          } catch (e) {
-            if (e instanceof SecurityViolationError) {
-              throw e;
-            }
+          } catch {
             // File not found - silently ignore (matches GNU sed behavior)
           }
         }
@@ -315,13 +293,8 @@ async function processContent(
   if (fs && cwd) {
     for (const [filePath, fileContent] of fileWrites) {
       try {
-        await withDefenseContext("flush pending file writes", () =>
-          fs.writeFile(filePath, fileContent),
-        );
-      } catch (e) {
-        if (e instanceof SecurityViolationError) {
-          throw e;
-        }
+        await fs.writeFile(filePath, fileContent);
+      } catch {
         // Write error - silently ignore for now
       }
     }
@@ -346,13 +319,6 @@ export const sedCommand: RuntimeCommand = {
     args: string[],
     ctx: RuntimeCommandContext,
   ): Promise<ExecResult> {
-    assertDefenseContext(ctx.requireDefenseContext, "sed", "execution entry");
-    const withDefenseContext = <T>(
-      phase: string,
-      op: () => Promise<T>,
-    ): Promise<T> =>
-      awaitWithDefenseContext(ctx.requireDefenseContext, "sed", phase, op);
-
     if (hasHelpFlag(args)) {
       return showHelp(sedHelp);
     }
@@ -429,9 +395,7 @@ export const sedCommand: RuntimeCommand = {
     for (const scriptFile of scriptFiles) {
       const scriptPath = ctx.fs.resolvePath(ctx.cwd, scriptFile);
       try {
-        const scriptContent = await withDefenseContext("script file read", () =>
-          ctx.fs.readFile(scriptPath),
-        );
+        const scriptContent = await ctx.fs.readFile(scriptPath);
         // Split by newlines and add each line as a separate script
         for (const line of scriptContent.split("\n")) {
           const trimmed = line.trim();
@@ -439,10 +403,7 @@ export const sedCommand: RuntimeCommand = {
             scripts.push(trimmed);
           }
         }
-      } catch (e) {
-        if (e instanceof SecurityViolationError) {
-          throw e;
-        }
+      } catch {
         return {
           stdout: "",
           stderr: `sed: couldn't open file ${scriptFile}: No such file or directory\n`,
@@ -495,19 +456,18 @@ export const sedCommand: RuntimeCommand = {
         }
         const filePath = ctx.fs.resolvePath(ctx.cwd, file);
         try {
-          const fileContent = await withDefenseContext(
-            "in-place input read",
-            () => ctx.fs.readFile(filePath),
-          );
-          const result = await withDefenseContext("in-place processing", () =>
-            processContent(fileContent, commands, effectiveSilent, {
+          const fileContent = await ctx.fs.readFile(filePath);
+          const result = await processContent(
+            fileContent,
+            commands,
+            effectiveSilent,
+            {
               limits: ctx.limits,
               filename: file,
               fs: ctx.fs,
               cwd: ctx.cwd,
               coverage: ctx.coverage,
-              requireDefenseContext: ctx.requireDefenseContext,
-            }),
+            },
           );
           if (result.errorMessage) {
             return {
@@ -516,13 +476,8 @@ export const sedCommand: RuntimeCommand = {
               exitCode: result.exitCode ?? 1,
             };
           }
-          await withDefenseContext("in-place output write", () =>
-            ctx.fs.writeFile(filePath, result.output),
-          );
+          await ctx.fs.writeFile(filePath, result.output);
         } catch (e) {
-          if (e instanceof SecurityViolationError) {
-            throw e;
-          }
           if (e instanceof ExecutionLimitError) {
             const message = sanitizeErrorMessage(e.message);
             return {
@@ -549,14 +504,16 @@ export const sedCommand: RuntimeCommand = {
     if (files.length === 0) {
       content = decodeBytesToUtf8(ctx.stdin);
       try {
-        const result = await withDefenseContext("stdin processing", () =>
-          processContent(content, commands, effectiveSilent, {
+        const result = await processContent(
+          content,
+          commands,
+          effectiveSilent,
+          {
             limits: ctx.limits,
             fs: ctx.fs,
             cwd: ctx.cwd,
             coverage: ctx.coverage,
-            requireDefenseContext: ctx.requireDefenseContext,
-          }),
+          },
         );
         // sed emits text; the pipeline handles encoding.
         return {
@@ -565,9 +522,6 @@ export const sedCommand: RuntimeCommand = {
           exitCode: result.exitCode ?? 0,
         };
       } catch (e) {
-        if (e instanceof SecurityViolationError) {
-          throw e;
-        }
         if (e instanceof ExecutionLimitError) {
           const message = sanitizeErrorMessage(e.message);
           return {
@@ -596,13 +550,8 @@ export const sedCommand: RuntimeCommand = {
       } else {
         const filePath = ctx.fs.resolvePath(ctx.cwd, file);
         try {
-          fileContent = await withDefenseContext("input file read", () =>
-            ctx.fs.readFile(filePath),
-          );
+          fileContent = await ctx.fs.readFile(filePath);
         } catch (e) {
-          if (e instanceof SecurityViolationError) {
-            throw e;
-          }
           if (e instanceof ExecutionLimitError) {
             const message = sanitizeErrorMessage(e.message);
             return {
@@ -631,25 +580,19 @@ export const sedCommand: RuntimeCommand = {
     }
 
     try {
-      const result = await withDefenseContext("final processing", () =>
-        processContent(content, commands, effectiveSilent, {
-          limits: ctx.limits,
-          filename: files.length === 1 ? files[0] : undefined,
-          fs: ctx.fs,
-          cwd: ctx.cwd,
-          coverage: ctx.coverage,
-          requireDefenseContext: ctx.requireDefenseContext,
-        }),
-      );
+      const result = await processContent(content, commands, effectiveSilent, {
+        limits: ctx.limits,
+        filename: files.length === 1 ? files[0] : undefined,
+        fs: ctx.fs,
+        cwd: ctx.cwd,
+        coverage: ctx.coverage,
+      });
       return {
         stdout: result.output,
         stderr: result.errorMessage ? `${result.errorMessage}\n` : "",
         exitCode: result.exitCode ?? 0,
       };
     } catch (e) {
-      if (e instanceof SecurityViolationError) {
-        throw e;
-      }
       if (e instanceof ExecutionLimitError) {
         const message = sanitizeErrorMessage(e.message);
         return {

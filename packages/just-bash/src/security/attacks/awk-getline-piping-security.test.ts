@@ -57,8 +57,8 @@ describeDefense("AWK getline piping security", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it("keeps getline command pipes working with defense-in-depth enabled", async () => {
-    const bash = new Bash({ defenseInDepth: true });
+  it("keeps getline command pipes working", async () => {
+    const bash = new Bash();
     const result = await bash.exec(`
       awk 'BEGIN {
         r1 = ("echo first" | getline a)

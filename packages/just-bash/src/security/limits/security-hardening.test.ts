@@ -19,7 +19,6 @@ import { buildIfsCharClassPattern } from "../../interpreter/helpers/ifs.js";
 import { resolveLimits } from "../../limits.js";
 import { parseArithNumber } from "../../parser/arithmetic-primaries.js";
 import { Lexer } from "../../parser/lexer.js";
-import { DefenseInDepthBox } from "../defense-in-depth-box.js";
 
 describe("Security Hardening", () => {
   let bash: Bash;
@@ -557,32 +556,6 @@ describe("Security Hardening", () => {
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toBe("a\nb\nc\n");
       });
-    });
-  });
-
-  // =====================================================================
-  // 9. Defense-in-depth warning and isEnabled()
-  // =====================================================================
-  describe("9. Defense-in-depth isEnabled()", () => {
-    it("should report the resolved runtime capability", () => {
-      DefenseInDepthBox.resetInstance();
-      const box = DefenseInDepthBox.getInstance({ enabled: true });
-      expect(box.isEnabled()).toBe(box.getStatus().state === "enabled");
-      DefenseInDepthBox.resetInstance();
-    });
-
-    it("should report disabled when config is disabled", () => {
-      DefenseInDepthBox.resetInstance();
-      const box = DefenseInDepthBox.getInstance({ enabled: false });
-      expect(box.isEnabled()).toBe(false);
-      DefenseInDepthBox.resetInstance();
-    });
-
-    it("should capability-detect when not configured", () => {
-      DefenseInDepthBox.resetInstance();
-      const box = DefenseInDepthBox.getInstance();
-      expect(box.isEnabled()).toBe(box.getStatus().state === "enabled");
-      DefenseInDepthBox.resetInstance();
     });
   });
 

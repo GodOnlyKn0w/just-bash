@@ -13,7 +13,6 @@ import {
   type ExecutionLimits,
   resolveLimits,
 } from "./limits.js";
-import { _promiseThen } from "./security/trusted-globals.js";
 import type {
   Command,
   CommandContext,
@@ -32,11 +31,6 @@ export type CustomCommand = Command | LazyCommand;
  */
 export interface LazyCommand {
   name: string;
-  /**
-   * Set false to run through the restricted extension boundary. Commands are
-   * trusted by default for compatibility with existing host integrations.
-   */
-  trusted?: boolean;
   load: () => Promise<Command>;
 }
 
@@ -100,9 +94,8 @@ export function isLazyCommand(cmd: CustomCommand): cmd is LazyCommand {
 export function defineCommand(
   name: string,
   execute: (args: string[], ctx: ResolvedCommandContext) => Promise<ExecResult>,
-  options: { trusted?: boolean } = {},
 ): Command {
-  return { name, trusted: options.trusted !== false, execute };
+  return { name, execute };
 }
 
 /** A caller waiting for a shared lazy load to settle. */
@@ -157,18 +150,14 @@ export function createLazyCustomCommand(lazy: LazyCommand): Command {
       fail(error);
       return;
     }
-    // This load outlives the invocation that started it, so its settlement must
-    // not be tied to that invocation's security lifetime: callbacks registered
-    // through the patched Promise.prototype.then are blocked once that execution
-    // ends, which would strand the load and let its failure escape. Settling
-    // through the intrinsic then also keeps the loader's own promise methods,
-    // and anything they run, outside trusted code.
-    _promiseThen.call(loaded, succeed, fail);
+    // Settle through the intrinsic then: Promise.resolve returns the loader's
+    // own native promise unchanged, and its then property may have been
+    // replaced by the loader.
+    Promise.prototype.then.call(loaded, succeed, fail);
   };
 
   return {
     name: lazy.name,
-    trusted: lazy.trusted !== false,
     async execute(
       args: string[],
       ctx: ResolvedCommandContext,

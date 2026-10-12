@@ -80,45 +80,4 @@ describe("Bash commands filtering", () => {
     expect((await env.exec("rm /test.txt")).exitCode).toBe(127);
     expect((await env.exec("cp /test.txt /test2.txt")).exitCode).toBe(127);
   });
-
-  it("explicitly trusted custom commands can use Node.js APIs", async () => {
-    const env = new Bash({
-      customCommands: [
-        {
-          name: "myfetch",
-          trusted: true,
-          execute: async (_args, _ctx) => {
-            // Trusted host extensions deliberately run outside the restricted
-            // command context.
-            await new Promise((r) => setTimeout(r, 1));
-            return { stdout: "custom-ok\n", stderr: "", exitCode: 0 };
-          },
-        },
-      ],
-    });
-
-    const result = await env.exec("myfetch");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("custom-ok\n");
-  });
-
-  it("untrusted custom commands are blocked from dangerous globals", async () => {
-    const env = new Bash({
-      customCommands: [
-        {
-          name: "unsafe",
-          trusted: false,
-          execute: async () => {
-            setTimeout(() => {}, 1);
-            return { stdout: "should-not-run\n", stderr: "", exitCode: 0 };
-          },
-        },
-      ],
-    });
-
-    const result = await env.exec("unsafe");
-    expect(result.exitCode).toBe(1);
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("setTimeout is blocked");
-  });
 });

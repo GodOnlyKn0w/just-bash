@@ -459,54 +459,6 @@ const BANNED_PATTERNS = [
     autoSafe: [/Object\.hasOwn/, /Object\.keys/, /Object\.entries/],
   },
   {
-    name: "Raw await in defense-sensitive interpreters",
-    // Skip comment lines
-    pattern: /^(?!\s*(?:\/\/|\/?\*)).*\bawait\b/,
-    filePattern:
-      /src\/commands\/(?:awk\/(?:awk2|interpreter\/[^/]+)|sed\/sed|jq\/jq|yq\/yq|query-engine\/[^/]+)\.ts$/,
-    message:
-      "Raw await in high-risk interpreter paths can hide defense-context drift.\n" +
-      "Use defense-aware await wrappers to fail closed on context loss.",
-    solutions: [
-      "Wrap async boundaries with awaitWithDefenseContext(...)",
-      "Use a local withDefenseContext(...) helper that delegates to awaitWithDefenseContext(...)",
-      "Use @banned-pattern-ignore only with a concrete safety reason",
-    ],
-    autoSafe: [/awaitWithDefenseContext\s*\(/, /withDefenseContext\s*\(/],
-  },
-  {
-    name: "Inline worker.on callback in WASM command paths",
-    // Skip comment lines
-    pattern:
-      /^(?!\s*(?:\/\/|\/?\*)).*\bworker\.on\s*\(\s*["'][^"']+["']\s*,\s*(?:\([^)]*\)\s*=>|function\s*\()/,
-    filePattern: /src\/commands\/(?:python3\/python3|sqlite3\/sqlite3)\.ts$/,
-    message:
-      "Inline worker event callbacks in WASM command paths can lose defense context.\n" +
-      "Bind callbacks via bindDefenseContextCallback(...) and pass a named handler.",
-    solutions: [
-      "Create a named callback with bindDefenseContextCallback(...)",
-      "Register as worker.on(event, (arg) => wrapped(arg)) to catch and sanitize failures",
-      "Use @banned-pattern-ignore only with a concrete safety reason",
-    ],
-    autoSafe: [/bindDefenseContextCallback\s*\(/],
-  },
-  {
-    name: "Inline _setTimeout callback in WASM command paths",
-    // Skip comment lines
-    pattern:
-      /^(?!\s*(?:\/\/|\/?\*)).*\b_setTimeout\s*\(\s*(?:\([^)]*\)\s*=>|function\s*\()/,
-    filePattern: /src\/commands\/(?:python3\/python3|sqlite3\/sqlite3)\.ts$/,
-    message:
-      "Inline timeout callbacks in WASM command paths can run without defense context.\n" +
-      "Use bindDefenseContextCallback(...) and invoke it from a guarded wrapper.",
-    solutions: [
-      "Create onTimeout with bindDefenseContextCallback(...)",
-      "Call onTimeout() inside try/catch and sanitize failures",
-      "Use @banned-pattern-ignore only with a concrete safety reason",
-    ],
-    autoSafe: [/bindDefenseContextCallback\s*\(/],
-  },
-  {
     name: "Raw Record<string, unknown> cast in query engine",
     pattern: /as\s+Record\s*<\s*string\s*,\s*unknown\s*>/,
     filePattern: /src\/commands\/query-engine\/(?!safe-object).*\.ts$/,

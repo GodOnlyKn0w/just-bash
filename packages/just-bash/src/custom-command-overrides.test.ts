@@ -1,18 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Bash } from "./Bash.js";
 import { defineCommand } from "./custom-commands.js";
-import {
-  DefenseInDepthBox,
-  SecurityViolationError,
-} from "./security/defense-in-depth-box.js";
-import { _setTimeout } from "./timers.js";
-import type { RuntimeCommand } from "./types.js";
 
 describe("custom command overrides", () => {
-  afterEach(() => {
-    DefenseInDepthBox.resetInstance();
-  });
-
   it("provides the shadowed bundled command through the context", async () => {
     const cat = defineCommand("cat", async (args, ctx) => {
       if (!ctx.origCommand) throw new Error("missing original command");
@@ -64,50 +54,6 @@ describe("custom command overrides", () => {
         exitCode: 0,
       },
     );
-  });
-
-  it("runs the original command with its own trust setting", async () => {
-    const bash = new Bash({ defenseInDepth: true });
-    const commands = (
-      bash as unknown as { commands: Map<string, RuntimeCommand> }
-    ).commands;
-    const originalCat = commands.get("cat");
-    if (!originalCat) throw new Error("missing bundled cat command");
-    originalCat.execute = async () => {
-      const isFunctionBlocked = () => {
-        try {
-          new Function("return 1");
-          return false;
-        } catch (error) {
-          return error instanceof SecurityViolationError;
-        }
-      };
-      const directlyBlocked = isFunctionBlocked();
-      const promiseBlocked = await Promise.resolve().then(isFunctionBlocked);
-      const timerBlocked = await new Promise<boolean>((resolve) => {
-        _setTimeout(() => resolve(isFunctionBlocked()), 0);
-      });
-      const trustedValue = await DefenseInDepthBox.runTrustedAsync(async () =>
-        new Function("return 2")(),
-      );
-      return {
-        stdout: `${directlyBlocked}:${promiseBlocked}:${timerBlocked}:${trustedValue}\n`,
-        stderr: "",
-        exitCode: 0,
-      };
-    };
-    bash.registerCommand(
-      defineCommand("cat", async (args, ctx) => {
-        if (!ctx.origCommand) throw new Error("missing original command");
-        return ctx.origCommand(args);
-      }),
-    );
-
-    expect(await bash.exec("cat")).toMatchObject({
-      stdout: "true:true:true:2\n",
-      stderr: "",
-      exitCode: 0,
-    });
   });
 
   it("omits the original command for a new command name", async () => {

@@ -17,7 +17,6 @@ import {
 import { mapToRecord } from "../../helpers/env.js";
 import { shellJoinArgs } from "../../helpers/shell-quote.js";
 import { getErrorMessage } from "../../interpreter/helpers/errors.js";
-import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import { _clearFiniteTimeout, _setTimeoutIfFinite } from "../../timers.js";
 import type {
   CommandExecOptions,
@@ -622,7 +621,6 @@ const enqueue = <T>(
   operation: () => Promise<T>,
   signal: AbortSignal | undefined,
 ): Promise<T> => {
-  const boundOperation = DefenseInDepthBox.bindCurrentContext(operation);
   return new Promise<T>((resolve, reject) => {
     const queued: QueuedExecution = {
       canceled: false,
@@ -630,7 +628,7 @@ const enqueue = <T>(
         signal?.removeEventListener("abort", cancel);
         void (async () => {
           try {
-            resolve(await boundOperation());
+            resolve(await operation());
           } catch (error) {
             reject(error);
           } finally {
@@ -792,7 +790,7 @@ async function executeWithRunInner(
     try {
       return {
         ok: true,
-        value: await DefenseInDepthBox.runUntrustedAsync(operation),
+        value: await operation(),
       };
     } catch (error) {
       return { ok: false, error: sanitize(getErrorMessage(error)) };
@@ -851,148 +849,140 @@ async function executeWithRunInner(
     );
     return output;
   }
-  const runner = DefenseInDepthBox.runTrusted(() =>
-    createRunner({
-      syncHostFunctions: {
-        [hostNamespace]: {
-          bootstrapError(message: string) {
-            if (!bootstrapActive) {
-              throw new Error("Bootstrap phase has ended.");
+  const runner = createRunner({
+    syncHostFunctions: {
+      [hostNamespace]: {
+        bootstrapError(message: string) {
+          if (!bootstrapActive) {
+            throw new Error("Bootstrap phase has ended.");
+          }
+          bootstrapFailure ??= sanitizeErrorMessage(
+            typeof message === "string" ? message : "Bootstrap failed",
+          );
+          throw new Error("Bootstrap failed.");
+        },
+        bootstrapDone() {
+          bootstrapActive = false;
+        },
+        exit(code: number) {
+          if (!consumeBridgeRequest()) {
+            throw new Error(bridgeLimitMessage);
+          }
+          requestedExitCode ??= Number.isFinite(code) ? Math.trunc(code) : 0;
+          output.exitCode = requestedExitCode;
+          throw new Error("Guest requested process exit.");
+        },
+        fsRead: (path: string) =>
+          attempt(async () => {
+            const resolved = resolve(path);
+            const stat = await ctx.fs.stat(resolved);
+            if (stat.size > maxFileReadBytes) {
+              throw new Error(
+                `File exceeds JavaScript bridge read limit (${maxFileReadBytes} bytes)`,
+              );
             }
-            bootstrapFailure ??= sanitizeErrorMessage(
-              typeof message === "string" ? message : "Bootstrap failed",
+            const data = await ctx.fs.readFileBuffer(resolved);
+            if (data.byteLength > maxFileReadBytes) {
+              throw new Error(
+                `File exceeds JavaScript bridge read limit (${maxFileReadBytes} bytes)`,
+              );
+            }
+            return Buffer.from(data).toString("base64");
+          }),
+        fsWrite: (path: string, data: unknown) =>
+          attempt(
+            async () => await ctx.fs.writeFile(resolve(path), toFileData(data)),
+          ),
+        fsAppend: (path: string, data: unknown) =>
+          attempt(
+            async () =>
+              await ctx.fs.appendFile(resolve(path), toFileData(data)),
+          ),
+        fsStat: (path: string, lstat: boolean) =>
+          attempt(async () =>
+            serializeStat(
+              await (lstat
+                ? ctx.fs.lstat(resolve(path))
+                : ctx.fs.stat(resolve(path))),
+            ),
+          ),
+        fsReaddir: (path: string) =>
+          attempt(async () => await ctx.fs.readdir(resolve(path))),
+        fsMkdir: (path: string, recursive: boolean) =>
+          attempt(async () => await ctx.fs.mkdir(resolve(path), { recursive })),
+        fsRm: (path: string, recursive: boolean, force: boolean) =>
+          attempt(
+            async () => await ctx.fs.rm(resolve(path), { force, recursive }),
+          ),
+        fsExists: (path: string) =>
+          attempt(async () => await ctx.fs.exists(resolve(path))),
+        fsSymlink: (target: string, path: string) =>
+          attempt(async () => await ctx.fs.symlink(target, resolve(path))),
+        fsReadlink: (path: string) =>
+          attempt(async () => await ctx.fs.readlink(resolve(path))),
+        fsChmod: (path: string, mode: number) =>
+          attempt(async () => await ctx.fs.chmod(resolve(path), mode)),
+        fsRealpath: (path: string) =>
+          attempt(async () => await ctx.fs.realpath(resolve(path))),
+        fsRename: (from: string, to: string) =>
+          attempt(async () => await ctx.fs.mv(resolve(from), resolve(to))),
+        fsCopy: (from: string, to: string) =>
+          attempt(async () => await ctx.fs.cp(resolve(from), resolve(to))),
+        stdout: (value: string) => appendOutput("stdout", value),
+        stderr: (value: string) => appendOutput("stderr", value),
+        async exec(command: string, stdin?: string) {
+          return await attempt(async () => {
+            if (!ctx.exec)
+              throw new Error(
+                "Command execution not available in this context.",
+              );
+            const execOptions: CommandExecOptions = {
+              cwd: ctx.cwd,
+              env,
+              signal: getHostFunctionContext().abortSignal,
+              stdin: stdin ?? "",
+            };
+            const result = await jsExecContext.run(
+              true,
+              () => ctx.exec?.(command, execOptions) as Promise<ExecResult>,
             );
-            throw new Error("Bootstrap failed.");
-          },
-          bootstrapDone() {
-            bootstrapActive = false;
-          },
-          exit(code: number) {
-            if (!consumeBridgeRequest()) {
-              throw new Error(bridgeLimitMessage);
-            }
-            requestedExitCode ??= Number.isFinite(code) ? Math.trunc(code) : 0;
-            output.exitCode = requestedExitCode;
-            throw new Error("Guest requested process exit.");
-          },
-          fsRead: (path: string) =>
-            attempt(async () => {
-              const resolved = resolve(path);
-              const stat = await ctx.fs.stat(resolved);
-              if (stat.size > maxFileReadBytes) {
-                throw new Error(
-                  `File exceeds JavaScript bridge read limit (${maxFileReadBytes} bytes)`,
-                );
-              }
-              const data = await ctx.fs.readFileBuffer(resolved);
-              if (data.byteLength > maxFileReadBytes) {
-                throw new Error(
-                  `File exceeds JavaScript bridge read limit (${maxFileReadBytes} bytes)`,
-                );
-              }
-              return Buffer.from(data).toString("base64");
-            }),
-          fsWrite: (path: string, data: unknown) =>
-            attempt(
-              async () =>
-                await ctx.fs.writeFile(resolve(path), toFileData(data)),
-            ),
-          fsAppend: (path: string, data: unknown) =>
-            attempt(
-              async () =>
-                await ctx.fs.appendFile(resolve(path), toFileData(data)),
-            ),
-          fsStat: (path: string, lstat: boolean) =>
-            attempt(async () =>
-              serializeStat(
-                await (lstat
-                  ? ctx.fs.lstat(resolve(path))
-                  : ctx.fs.stat(resolve(path))),
-              ),
-            ),
-          fsReaddir: (path: string) =>
-            attempt(async () => await ctx.fs.readdir(resolve(path))),
-          fsMkdir: (path: string, recursive: boolean) =>
-            attempt(
-              async () => await ctx.fs.mkdir(resolve(path), { recursive }),
-            ),
-          fsRm: (path: string, recursive: boolean, force: boolean) =>
-            attempt(
-              async () => await ctx.fs.rm(resolve(path), { force, recursive }),
-            ),
-          fsExists: (path: string) =>
-            attempt(async () => await ctx.fs.exists(resolve(path))),
-          fsSymlink: (target: string, path: string) =>
-            attempt(async () => await ctx.fs.symlink(target, resolve(path))),
-          fsReadlink: (path: string) =>
-            attempt(async () => await ctx.fs.readlink(resolve(path))),
-          fsChmod: (path: string, mode: number) =>
-            attempt(async () => await ctx.fs.chmod(resolve(path), mode)),
-          fsRealpath: (path: string) =>
-            attempt(async () => await ctx.fs.realpath(resolve(path))),
-          fsRename: (from: string, to: string) =>
-            attempt(async () => await ctx.fs.mv(resolve(from), resolve(to))),
-          fsCopy: (from: string, to: string) =>
-            attempt(async () => await ctx.fs.cp(resolve(from), resolve(to))),
-          stdout: (value: string) => appendOutput("stdout", value),
-          stderr: (value: string) => appendOutput("stderr", value),
-          async exec(command: string, stdin?: string) {
-            return await attempt(async () => {
-              if (!ctx.exec)
-                throw new Error(
-                  "Command execution not available in this context.",
-                );
-              const execOptions: CommandExecOptions = {
-                cwd: ctx.cwd,
-                env,
-                signal: getHostFunctionContext().abortSignal,
-                stdin: stdin ?? "",
-              };
-              const result = await jsExecContext.run(
-                true,
-                () => ctx.exec?.(command, execOptions) as Promise<ExecResult>,
+            return projectExecResult(result);
+          });
+        },
+        async execArgs(command: string, args: string[]) {
+          return await attempt(async () => {
+            if (!ctx.exec)
+              throw new Error(
+                "Command execution not available in this context.",
               );
-              return projectExecResult(result);
-            });
-          },
-          async execArgs(command: string, args: string[]) {
-            return await attempt(async () => {
-              if (!ctx.exec)
-                throw new Error(
-                  "Command execution not available in this context.",
-                );
-              const result = await jsExecContext.run(
-                true,
-                () =>
-                  ctx.exec?.(shellJoinArgs([command]), {
-                    // Preserve spawnSync's argv-only executable semantics.
-                    args: args.map(String),
-                    cwd: ctx.cwd,
-                    env,
-                    signal: getHostFunctionContext().abortSignal,
-                  }) as Promise<ExecResult>,
-              );
-              return projectExecResult(result);
-            });
-          },
-          async invokeTool(path: string, argsJson: string) {
-            return await attempt(async () => {
-              if (!ctx.invokeTool) throw new Error(`Unknown tool: ${path}`);
-              const { abortSignal } = getHostFunctionContext();
-              return await DefenseInDepthBox.runTrustedAsync(
-                () =>
-                  ctx.invokeTool?.(
-                    path,
-                    argsJson,
-                    abortSignal,
-                  ) as Promise<string>,
-              );
-            }, sanitizeHostErrorMessage);
-          },
+            const result = await jsExecContext.run(
+              true,
+              () =>
+                ctx.exec?.(shellJoinArgs([command]), {
+                  // Preserve spawnSync's argv-only executable semantics.
+                  args: args.map(String),
+                  cwd: ctx.cwd,
+                  env,
+                  signal: getHostFunctionContext().abortSignal,
+                }) as Promise<ExecResult>,
+            );
+            return projectExecResult(result);
+          });
+        },
+        async invokeTool(path: string, argsJson: string) {
+          return await attempt(async () => {
+            if (!ctx.invokeTool) throw new Error(`Unknown tool: ${path}`);
+            const { abortSignal } = getHostFunctionContext();
+            return await (ctx.invokeTool?.(
+              path,
+              argsJson,
+              abortSignal,
+            ) as Promise<string>);
+          }, sanitizeHostErrorMessage);
         },
       },
-    }),
-  );
+    },
+  });
 
   const setup = guestSetupSource(
     serializedEnv,
@@ -1070,7 +1060,7 @@ ${bootstrap}
         )});`;
       }
       try {
-        return await DefenseInDepthBox.runUntrustedAsync(async () => {
+        return await (async () => {
           const stat = await ctx.fs.stat(specifier);
           if (stat.size > maxModuleReadBytes) {
             throw new Error(
@@ -1084,7 +1074,7 @@ ${bootstrap}
             );
           }
           return moduleSource;
-        });
+        })();
       } catch (error) {
         return `throw new Error(${JSON.stringify(
           sanitizeErrorMessage(getErrorMessage(error)),
@@ -1132,35 +1122,31 @@ ${bootstrap}
 
   try {
     await jsExecContext.run(true, async () => {
-      let runPromise!: ReturnType<typeof runner.run>;
-      DefenseInDepthBox.runTrusted(() => {
-        runPromise = runner.run({
-          abortSignal,
-          limits: {
-            maxBridgeRequests: Math.min(
-              Math.max(
-                1,
-                ctx.limits.maxJsBridgeRequests + (options.isModule ? 4 : 2),
-              ),
-              RUN_MAX_LIMIT_VALUE,
+      await runner.run({
+        abortSignal,
+        limits: {
+          maxBridgeRequests: Math.min(
+            Math.max(
+              1,
+              ctx.limits.maxJsBridgeRequests + (options.isModule ? 4 : 2),
             ),
-            maxConsoleOutputBytes: 1,
-            maxHostFunctionArgumentsBytes: maxBridgePayloadBytes,
-            maxHostFunctionOutputBytes: maxRunHostFunctionOutputBytes,
-            maxResultBytes: Math.min(
-              ctx.limits.maxWorkerMessageBytes,
-              RUN_MAX_LIMIT_VALUE,
-            ),
-            maxSourceBytes: maxRunSourceBytes,
-            memoryLimitBytes: RUN_MEMORY_LIMIT_BYTES,
-            timeoutMs: runTimeoutMs,
-          },
-          moduleLoader,
-          source,
-          sourceType: options.isModule ? "module" : "function-body",
-        });
+            RUN_MAX_LIMIT_VALUE,
+          ),
+          maxConsoleOutputBytes: 1,
+          maxHostFunctionArgumentsBytes: maxBridgePayloadBytes,
+          maxHostFunctionOutputBytes: maxRunHostFunctionOutputBytes,
+          maxResultBytes: Math.min(
+            ctx.limits.maxWorkerMessageBytes,
+            RUN_MAX_LIMIT_VALUE,
+          ),
+          maxSourceBytes: maxRunSourceBytes,
+          memoryLimitBytes: RUN_MEMORY_LIMIT_BYTES,
+          timeoutMs: runTimeoutMs,
+        },
+        moduleLoader,
+        source,
+        sourceType: options.isModule ? "module" : "function-body",
       });
-      await runPromise;
     });
   } catch (error) {
     const message = getErrorMessage(error);

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_BYTES } from "../../encoding.js";
 import { InMemoryFs } from "../../fs/in-memory-fs/in-memory-fs.js";
 import { resolveLimits } from "../../limits.js";
-import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import type { RuntimeCommandContext } from "../../types.js";
 
 type WorkerScript = (worker: {
@@ -139,24 +138,6 @@ describe("python3 worker protocol abuse", { retry: 2 }, () => {
     expect(result.exitCode).toBe(1);
   });
 
-  it("surfaces security-violation as error with violation type", async () => {
-    mockState.script = (worker) => {
-      worker.emitAuthenticated("message", {
-        type: "security-violation",
-        violation: { type: "shared_array_buffer" },
-      });
-    };
-
-    const result = await python3Command.execute(
-      ["-c", "print('ignored')"],
-      createContext(),
-    );
-
-    expect(result.stdout).toBe("BRIDGE_STDOUT\n");
-    expect(result.stderr).toContain("Security violation: shared_array_buffer");
-    expect(result.exitCode).toBe(1);
-  });
-
   it("sanitizes worker error strings before forwarding to stderr", async () => {
     mockState.script = (worker) => {
       worker.emitAuthenticated("message", {
@@ -194,24 +175,6 @@ describe("python3 worker protocol abuse", { retry: 2 }, () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       "python3: bridge error: bridge fault near <path> at <internal>:95\n",
-    );
-    expect(result.exitCode).toBe(1);
-  });
-
-  it("fails closed if worker callback runs without defense async context", async () => {
-    vi.spyOn(DefenseInDepthBox, "isInSandboxedContext").mockReturnValue(false);
-    mockState.script = (worker) => {
-      worker.emitAuthenticated("message", { success: true });
-    };
-
-    const result = await python3Command.execute(
-      ["-c", "print('ignored')"],
-      createContext({ requireDefenseContext: true }),
-    );
-
-    expect(result.stdout).toBe("BRIDGE_STDOUT\n");
-    expect(result.stderr).toBe(
-      "python3: python3 worker message callback attempted outside defense context\n\nThis is a defense-in-depth measure and indicates a bug in just-bash. Please report this at security@vercel.com\n",
     );
     expect(result.exitCode).toBe(1);
   });

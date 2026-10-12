@@ -13,7 +13,6 @@ describe("custom command deadline boundary", () => {
       data?: Record<string, unknown>;
     }> = [];
     const bash = new Bash({
-      defenseInDepth: false,
       logger: {
         info: (message, data) => logs.push({ message, data }),
         debug: (message, data) => logs.push({ message, data }),
@@ -45,7 +44,6 @@ describe("custom command deadline boundary", () => {
     const identities: object[] = [];
     let mutationError: unknown;
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [
         defineCommand("identity", async (_args, ctx) => {
           const identity = ctx.fsIdentity;
@@ -75,7 +73,6 @@ describe("custom command deadline boundary", () => {
   it("does not expose execution lifecycle or result-accounting authority", async () => {
     let exposedKeys: string[] = [];
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [
         defineCommand("budget", async (_args, ctx) => {
           const budget = ctx.executionScope as unknown as Record<
@@ -109,7 +106,6 @@ describe("custom command deadline boundary", () => {
     let retainedSignal: AbortSignal | undefined;
     let retainedIdentity: object | undefined;
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [
         defineCommand("retain", async (_args, ctx) => {
           retainedSignal = ctx.signal;
@@ -150,7 +146,6 @@ describe("custom command deadline boundary", () => {
           ? defineCommand(kind, execute)
           : { name: kind, load: async () => ({ name: kind, execute }) };
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [command],
       executionLimits: {
         maxExecutionTimeMs: 15,
@@ -168,7 +163,6 @@ describe("custom command deadline boundary", () => {
 
   it("makes timeout binding for an abort-ignorant custom command", async () => {
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [{ name: "never", execute: async () => never() }],
       executionLimits: {
         maxExecutionTimeMs: 1_000,
@@ -185,7 +179,6 @@ describe("custom command deadline boundary", () => {
 
   it("bounds an abort-ignorant sleep hook", async () => {
     const bash = new Bash({
-      defenseInDepth: false,
       sleep: async () => never(),
       executionLimits: {
         maxExecutionTimeMs: 1_000,
@@ -205,7 +198,6 @@ describe("custom command deadline boundary", () => {
     });
     let lateError: unknown;
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [
         defineCommand("late", async (_args, ctx) => {
           await gate;
@@ -238,7 +230,6 @@ describe("custom command deadline boundary", () => {
     let accountingError: unknown;
     const controller = new AbortController();
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [
         defineCommand("during-grace", async (_args, ctx) => {
           await new Promise<void>((resolve) => {
@@ -286,7 +277,6 @@ describe("custom command deadline boundary", () => {
     let cleanupRuns = 0;
     const controller = new AbortController();
     const bash = new Bash({
-      defenseInDepth: false,
       customCommands: [
         defineCommand("returned-capability", async (_args, ctx) => {
           const unregister = ctx.executionScope?.registerCleanup(() => {

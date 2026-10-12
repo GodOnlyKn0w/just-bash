@@ -1,8 +1,4 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
@@ -17,12 +13,10 @@ export default defineConfig({
       "**/js-exec/**",
       "**/python-scripting*",
     ],
-    setupFiles: [resolve(__dirname, "src/vitest-setup.ts")],
-    // Tests that patch globalThis (defense-in-depth) or spawn workers need
-    // process-level isolation so they don't leak state into thread neighbours.
+    // Tests that spawn workers or replace node modules need process-level
+    // isolation so they don't leak state into thread neighbours.
     poolMatchGlobs: [
       ["forks", "**/security/attacks/**"],
-      ["forks", "**/security/defense-in-depth*.test.ts"],
       ["forks", "**/security/sandbox/**"],
       ["forks", "**/sqlite3.worker-protocol-abuse.test.ts"],
       ["forks", "**/python3.worker-protocol-abuse.test.ts"],

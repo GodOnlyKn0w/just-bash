@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
-import { assertExecResultSafe } from "../fuzzing/oracles/assertions.js";
+import { assertExecResultSafe } from "./assertions.js";
 
 describe("Query Engine JS RCE Format Variants", () => {
   it("blocks constructor-chain payloads across yq non-JSON/YAML parsers", async () => {

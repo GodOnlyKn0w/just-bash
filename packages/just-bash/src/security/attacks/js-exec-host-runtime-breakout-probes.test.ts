@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
-import { assertExecResultSafe } from "../fuzzing/oracles/assertions.js";
+import { assertExecResultSafe } from "./assertions.js";
 
 describe("js-exec host runtime breakout probes", () => {
   it("keeps Function-constructor blocked on host-bridged function objects", async () => {

@@ -155,7 +155,7 @@ export type TraceCallback = (event: TraceEvent) => void;
 export interface RuntimeCommandContext {
   /** Virtual filesystem interface for file operations */
   fs: IFileSystem;
-  /** Stable identity of the underlying filesystem across defense wrappers. */
+  /** Stable identity of the underlying filesystem across the revocable wrappers given to commands. */
   fsIdentity?: object;
   /** Current working directory */
   cwd: string;
@@ -256,12 +256,6 @@ export interface RuntimeCommandContext {
    */
   signal?: AbortSignal;
   /**
-   * When true, command execution must remain inside DefenseInDepthBox
-   * async context. Commands with async boundaries should assert this
-   * before and after awaited operations.
-   */
-  requireDefenseContext?: boolean;
-  /**
    * Bootstrap JavaScript code for js-exec.
    * Threaded through the context chain instead of shell env to prevent
    * user access/injection via environment variables.
@@ -296,13 +290,6 @@ export type ResolvedCommandContext = RuntimeCommandContext;
 
 export interface Command {
   name: string;
-  /**
-   * Host-provided commands are trusted by default for compatibility. Set this
-   * to false to select the restricted extension boundary.
-   * Built-in commands should generally remain untrusted and use explicit
-   * trusted wrappers only at narrow infrastructure boundaries.
-   */
-  trusted?: boolean;
   /** @internal Marks host extensions that receive a least-authority budget. */
   internalIsExtension?: boolean;
   execute(args: string[], ctx: ResolvedCommandContext): Promise<ExecResult>;

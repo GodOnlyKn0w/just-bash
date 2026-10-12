@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
 import type { ExecResult } from "../../types.js";
-import { assertExecResultSafe } from "../fuzzing/oracles/assertions.js";
+import { assertExecResultSafe } from "./assertions.js";
 
 describe("YQ JS Tag Function Probe", () => {
   it("does not allow YAML js/function tags to reach JS execution via toJSON", async () => {

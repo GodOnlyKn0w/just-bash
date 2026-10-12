@@ -24,8 +24,6 @@ import {
 } from "../../fs/sanitize-error.js";
 import { resolveFileIdentity } from "../../fs/traversal.js";
 import { getErrorMessage } from "../../interpreter/helpers/errors.js";
-import { bindDefenseContextCallback } from "../../security/defense-context.js";
-import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import type {
   ExecResult,
   RuntimeCommand,
@@ -39,12 +37,7 @@ import {
   formatOutput,
   type OutputMode,
 } from "./formatters.js";
-import type {
-  StatementResult,
-  WorkerInput,
-  WorkerOutput,
-  WorkerSuccess,
-} from "./worker.js";
+import type { StatementResult, WorkerInput, WorkerOutput } from "./worker.js";
 
 const MAX_DATABASE_LOCK_WAITERS = 1024;
 const SQLITE_WORKER_OLD_GENERATION_MB = 128;
@@ -336,7 +329,7 @@ function parseArgs(args: string[]):
 
 // Get SQLite version from sql.js
 async function getSqliteVersion(): Promise<string> {
-  const SQL = await DefenseInDepthBox.runTrustedAsync(() => initSqlJs());
+  const SQL = await initSqlJs();
   const db = new SQL.Database();
   try {
     const result = db.exec("SELECT sqlite_version()");
@@ -443,14 +436,11 @@ function normalizeWorkerResult(
 
   const raw = result as {
     protocolToken?: unknown;
-    type?: unknown;
-    violation?: { type?: unknown };
     success?: unknown;
     error?: unknown;
     results?: unknown;
     hasModifications?: unknown;
     dbBuffer?: unknown;
-    defenseStats?: unknown;
   };
 
   if (
@@ -460,15 +450,6 @@ function normalizeWorkerResult(
     return {
       success: false,
       error: "Malformed worker response: invalid protocol token",
-    };
-  }
-
-  if (raw.type === "security-violation") {
-    return {
-      success: false,
-      error: `Security violation: ${
-        typeof raw.violation?.type === "string" ? raw.violation.type : "unknown"
-      }`,
     };
   }
 
@@ -519,14 +500,12 @@ function normalizeWorkerResult(
       (raw.dbBuffer as Uint8Array | null | undefined) === undefined
         ? null
         : (raw.dbBuffer as Uint8Array | null),
-    defenseStats: raw.defenseStats as WorkerSuccess["defenseStats"],
   };
 }
 
 async function executeInWorker(
   input: WorkerInput,
   controller: WorkerRequestController,
-  requireDefenseContext: boolean | undefined,
 ): Promise<WorkerOutput> {
   // Try to use worker thread for timeout protection
   try {
@@ -566,23 +545,18 @@ async function executeInWorker(
         );
       };
 
-      const onCancel = bindDefenseContextCallback(
-        requireDefenseContext,
-        "sqlite3",
-        "worker cancellation callback",
-        (reason: "abort" | "timeout") => {
-          void settle(
-            {
-              success: false,
-              error:
-                reason === "abort"
-                  ? controller.abortMessage()
-                  : controller.timeoutMessage("Query"),
-            },
-            true,
-          );
-        },
-      );
+      const onCancel = (reason: "abort" | "timeout") => {
+        void settle(
+          {
+            success: false,
+            error:
+              reason === "abort"
+                ? controller.abortMessage()
+                : controller.timeoutMessage("Query"),
+          },
+          true,
+        );
+      };
       controller.arm((reason) => {
         try {
           onCancel(reason);
@@ -599,79 +573,55 @@ async function executeInWorker(
       if (controller.isCanceled) return;
 
       try {
-        worker = DefenseInDepthBox.runTrusted(() =>
-          _internals.createWorker(workerPath, input),
-        );
+        worker = _internals.createWorker(workerPath, input);
       } catch (error) {
         controller.close();
         throw error;
       }
 
-      const onMessage = bindDefenseContextCallback(
-        requireDefenseContext,
-        "sqlite3",
-        "worker message callback",
-        (result: unknown) => {
-          try {
-            const response =
-              result && typeof result === "object"
-                ? {
-                    protocolToken: (result as Record<string, unknown>)
-                      .protocolToken,
-                    type: (result as Record<string, unknown>).type,
-                    violation: (result as Record<string, unknown>).violation,
-                    success: (result as Record<string, unknown>).success,
-                    error: (result as Record<string, unknown>).error,
-                    results: (result as Record<string, unknown>).results,
-                    hasModifications: (result as Record<string, unknown>)
-                      .hasModifications,
-                    defenseStats: (result as Record<string, unknown>)
-                      .defenseStats,
-                  }
-                : result;
-            controller.assertMessageSize(response, "response");
-            void settle(
-              normalizeWorkerResult(result, input.protocolToken),
-              true,
-            );
-          } catch (error) {
-            void settle(
-              {
-                success: false,
-                error: sanitizeHostErrorMessage(getErrorMessage(error)),
-              },
-              true,
-            );
-          }
-        },
-      );
-      const onError = bindDefenseContextCallback(
-        requireDefenseContext,
-        "sqlite3",
-        "worker error callback",
-        (err: unknown) => {
+      const onMessage = (result: unknown) => {
+        try {
+          const response =
+            result && typeof result === "object"
+              ? {
+                  protocolToken: (result as Record<string, unknown>)
+                    .protocolToken,
+                  success: (result as Record<string, unknown>).success,
+                  error: (result as Record<string, unknown>).error,
+                  results: (result as Record<string, unknown>).results,
+                  hasModifications: (result as Record<string, unknown>)
+                    .hasModifications,
+                }
+              : result;
+          controller.assertMessageSize(response, "response");
+          void settle(normalizeWorkerResult(result, input.protocolToken), true);
+        } catch (error) {
           void settle(
             {
               success: false,
-              error: sanitizeHostErrorMessage(getErrorMessage(err)),
+              error: sanitizeHostErrorMessage(getErrorMessage(error)),
             },
             true,
           );
-        },
-      );
-      const onExit = bindDefenseContextCallback(
-        requireDefenseContext,
-        "sqlite3",
-        "worker exit callback",
-        (code: number) => {
-          if (code !== 0) {
-            void settle(
-              { success: false, error: `Worker exited with code ${code}` },
-              false,
-            );
-          }
-        },
-      );
+        }
+      };
+      const onError = (err: unknown) => {
+        void settle(
+          {
+            success: false,
+            error: sanitizeHostErrorMessage(getErrorMessage(err)),
+          },
+          true,
+        );
+      };
+      const onExit = (code: number) => {
+        if (code !== 0) {
+          void settle(
+            { success: false, error: `Worker exited with code ${code}` },
+            false,
+          );
+        }
+      };
 
       const dispatchMessage = (result: unknown): void => {
         try {
@@ -881,11 +831,7 @@ export const sqlite3Command: RuntimeCommand = {
             "sqlite3 worker clone",
           );
         }
-        result = await executeInWorker(
-          workerInput,
-          requestController,
-          ctx.requireDefenseContext,
-        );
+        result = await executeInWorker(workerInput, requestController);
       } catch (e) {
         const message = sanitizeHostErrorMessage((e as Error).message);
         return {

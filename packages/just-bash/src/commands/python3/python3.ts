@@ -20,9 +20,6 @@ import {
 } from "../../fs/sanitize-error.js";
 import { mapToRecord } from "../../helpers/env.js";
 import { getErrorMessage } from "../../interpreter/helpers/errors.js";
-
-import { bindDefenseContextCallback } from "../../security/defense-context.js";
-import { DefenseInDepthBox } from "../../security/defense-in-depth-box.js";
 import type {
   ExecResult,
   RuntimeCommand,
@@ -162,7 +159,6 @@ type QueuedExecution = {
   executionId: symbol;
   input: WorkerInput;
   settle: (result: WorkerOutput) => void;
-  requireDefenseContext?: boolean;
   state: "queued" | "running" | "terminating" | "settled";
   worker: Worker | null;
   controller: WorkerRequestController;
@@ -209,8 +205,6 @@ function normalizeWorkerMessage(
 
   const raw = msg as {
     protocolToken?: unknown;
-    type?: unknown;
-    violation?: { type?: unknown };
     success?: unknown;
     error?: unknown;
   };
@@ -222,15 +216,6 @@ function normalizeWorkerMessage(
     return {
       success: false,
       error: "Malformed worker response: invalid protocol token",
-    };
-  }
-
-  if (raw.type === "security-violation") {
-    return {
-      success: false,
-      error: `Security violation: ${
-        typeof raw.violation?.type === "string" ? raw.violation.type : "unknown"
-      }`,
     };
   }
 
@@ -295,10 +280,8 @@ function processNextExecution(queueState: QueueState): void {
   // per worker lifetime, not per execution).
   let worker: Worker;
   try {
-    worker = DefenseInDepthBox.runTrusted(
-      // @banned-pattern-ignore: constructor is immediately owned by next.controller lifecycle
-      () => new Worker(workerPath, { workerData: next.input }),
-    );
+    worker = // @banned-pattern-ignore: constructor is immediately owned by next.controller lifecycle
+      new Worker(workerPath, { workerData: next.input });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     next.state = "settled";
@@ -368,55 +351,40 @@ function processNextExecution(queueState: QueueState): void {
     void settleActiveExecution(result, true);
   };
 
-  const onMessage = bindDefenseContextCallback(
-    next.requireDefenseContext,
-    "python3",
-    "worker message callback",
-    (msg: unknown) => {
-      try {
-        next.controller.assertMessageSize(msg, "response");
-      } catch (error) {
-        void settleActiveExecution(
-          {
-            success: false,
-            error: sanitizeHostErrorMessage(getErrorMessage(error)),
-          },
-          true,
-        );
-        return;
-      }
-      void settleActiveExecution(
-        normalizeWorkerMessage(msg, next.input.protocolToken),
-        true,
-      );
-    },
-  );
-  const onError = bindDefenseContextCallback(
-    next.requireDefenseContext,
-    "python3",
-    "worker error callback",
-    (err: Error) => {
-      const workerError = sanitizeHostErrorMessage(getErrorMessage(err));
+  const onMessage = (msg: unknown) => {
+    try {
+      next.controller.assertMessageSize(msg, "response");
+    } catch (error) {
       void settleActiveExecution(
         {
           success: false,
-          error: workerError,
+          error: sanitizeHostErrorMessage(getErrorMessage(error)),
         },
         true,
       );
-    },
-  );
-  const onExit = bindDefenseContextCallback(
-    next.requireDefenseContext,
-    "python3",
-    "worker exit callback",
-    () => {
-      void settleActiveExecution(
-        { success: false, error: "Worker exited unexpectedly" },
-        false,
-      );
-    },
-  );
+      return;
+    }
+    void settleActiveExecution(
+      normalizeWorkerMessage(msg, next.input.protocolToken),
+      true,
+    );
+  };
+  const onError = (err: Error) => {
+    const workerError = sanitizeHostErrorMessage(getErrorMessage(err));
+    void settleActiveExecution(
+      {
+        success: false,
+        error: workerError,
+      },
+      true,
+    );
+  };
+  const onExit = () => {
+    void settleActiveExecution(
+      { success: false, error: "Worker exited unexpectedly" },
+      false,
+    );
+  };
 
   const dispatchMessage = (msg: unknown): void => {
     try {
@@ -535,7 +503,6 @@ async function executePython(
         controller.close();
         resolve(result);
       },
-      requireDefenseContext: ctx.requireDefenseContext,
       state: "queued",
       worker: null,
       controller,
@@ -554,21 +521,16 @@ async function executePython(
       processNextExecution(queueState);
     };
 
-    const onCancel = bindDefenseContextCallback(
-      ctx.requireDefenseContext,
-      "python3",
-      "worker cancellation callback",
-      (reason: "abort" | "timeout") => {
-        bridgeHandler.stop?.();
-        queueEntry.cancel({
-          success: false,
-          error:
-            reason === "abort"
-              ? controller.abortMessage()
-              : controller.timeoutMessage(),
-        });
-      },
-    );
+    const onCancel = (reason: "abort" | "timeout") => {
+      bridgeHandler.stop?.();
+      queueEntry.cancel({
+        success: false,
+        error:
+          reason === "abort"
+            ? controller.abortMessage()
+            : controller.timeoutMessage(),
+      });
+    };
 
     const dispatchCancel = (reason: "abort" | "timeout"): void => {
       try {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
-import { assertExecResultSafe } from "../fuzzing/oracles/assertions.js";
+import { assertExecResultSafe } from "./assertions.js";
 
 describe("js-exec recursion guard bypass probes", () => {
   it("blocks nested js-exec via child_process.execSync", async () => {

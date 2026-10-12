@@ -12,11 +12,6 @@ import { BoundedStringBuilder } from "../../bounded-builder.js";
 import { decodeBytesToUtf8 } from "../../encoding.js";
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import { ExecutionLimitError } from "../../interpreter/errors.js";
-import {
-  assertDefenseContext,
-  awaitWithDefenseContext,
-} from "../../security/defense-context.js";
-import { SecurityViolationError } from "../../security/defense-in-depth-box.js";
 import type {
   ExecResult,
   RuntimeCommand,
@@ -281,13 +276,6 @@ export const yqCommand: RuntimeCommand = {
     args: string[],
     ctx: RuntimeCommandContext,
   ): Promise<ExecResult> {
-    assertDefenseContext(ctx.requireDefenseContext, "yq", "execution entry");
-    const withDefenseContext = <T>(
-      phase: string,
-      op: () => Promise<T>,
-    ): Promise<T> =>
-      awaitWithDefenseContext(ctx.requireDefenseContext, "yq", phase, op);
-
     if (hasHelpFlag(args)) return showHelp(yqHelp);
 
     const parsed = parseArgs(args);
@@ -325,13 +313,8 @@ export const yqCommand: RuntimeCommand = {
       try {
         const resolvedFilePath = ctx.fs.resolvePath(ctx.cwd, files[0]);
         filePath = resolvedFilePath;
-        input = await withDefenseContext("file read", () =>
-          ctx.fs.readFile(resolvedFilePath),
-        );
-      } catch (e) {
-        if (e instanceof SecurityViolationError) {
-          throw e;
-        }
+        input = await ctx.fs.readFile(resolvedFilePath);
+      } catch {
         return {
           stdout: "",
           stderr: `yq: ${files[0]}: No such file or directory\n`,
@@ -360,7 +343,6 @@ export const yqCommand: RuntimeCommand = {
           : undefined,
         env: ctx.env,
         coverage: ctx.coverage,
-        requireDefenseContext: ctx.requireDefenseContext,
         budget: { operations: 0, callDepth: 0 },
       };
       const dataLimits = {
@@ -457,9 +439,7 @@ export const yqCommand: RuntimeCommand = {
 
       // Handle inplace mode
       if (options.inplace && filePath) {
-        await withDefenseContext("in-place write", () =>
-          ctx.fs.writeFile(filePath, finalOutput),
-        );
+        await ctx.fs.writeFile(filePath, finalOutput);
         return { stdout: "", stderr: "", exitCode: 0 };
       }
 
@@ -477,9 +457,6 @@ export const yqCommand: RuntimeCommand = {
         exitCode,
       };
     } catch (e) {
-      if (e instanceof SecurityViolationError) {
-        throw e;
-      }
       if (e instanceof ExecutionLimitError) {
         const message = sanitizeErrorMessage(e.message);
         return {

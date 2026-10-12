@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from "vitest";
 import { Bash } from "../../Bash.js";
-import { assertExecResultSafe } from "../fuzzing/oracles/assertions.js";
+import { assertExecResultSafe } from "./assertions.js";
 
 describe("Fuzz-discovered attack vectors", () => {
   describe("Bash variable expansion with prototype-like names", () => {

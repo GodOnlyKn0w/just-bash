@@ -8,10 +8,8 @@
  * and delegates execution to the Interpreter.
  */
 
-import type { FunctionDefNode } from "./ast/types.js";
-// Eagerly import timers to capture references before defense-in-depth patches them
-import "./timers.js";
 import { combineAbortSignals } from "./abort-signals.js";
+import type { FunctionDefNode } from "./ast/types.js";
 import { utf8ByteLength } from "./commands/printf/escapes.js";
 import {
   type CommandName,
@@ -60,11 +58,6 @@ import {
 } from "./limits.js";
 import { LexerError } from "./parser/lexer.js";
 import { type ParseException, parse } from "./parser/parser.js";
-import {
-  DefenseInDepthBox,
-  SecurityViolationError,
-} from "./security/defense-in-depth-box.js";
-import type { DefenseInDepthConfig } from "./security/types.js";
 import { assertSourceWithinLimit } from "./source-limit.js";
 import { serialize } from "./transform/serialize.js";
 import type {
@@ -213,36 +206,6 @@ export interface BashOptions {
    */
   trace?: TraceCallback;
   /**
-   * Defense-in-depth configuration.
-   *
-   * When enabled, monkey-patches dangerous JavaScript globals (Function, eval,
-   * setTimeout, process, etc.) during script execution to block potential
-   * escape vectors.
-   *
-   * IMPORTANT: This is a SECONDARY defense layer. It should never be relied
-   * upon as the primary security mechanism. The primary security comes from
-   * proper sandboxing, input validation, and architectural constraints.
-   *
-   * @example
-   * ```ts
-   * // Capability-detect the strongest available protection.
-   * const bash = new Bash({ defenseInDepth: { enabled: "auto" } });
-   *
-   * // With custom configuration
-   * const bash = new Bash({
-   *   defenseInDepth: {
-   *     enabled: true,
-   *     auditMode: false, // Set to true to log but not block
-   *     onViolation: (v) => console.warn('Violation:', v),
-   *   },
-   * });
-   * ```
-   * Node versions without context-aware ESM loader hooks retain the scoped
-   * best-effort controls and report the unavailable loader capability in
-   * DefenseInDepthStatus.
-   */
-  defenseInDepth?: DefenseInDepthConfig | boolean;
-  /**
    * Feature coverage writer for fuzzing instrumentation.
    * When provided, interpreter emits coverage hits for analysis.
    */
@@ -317,7 +280,6 @@ export class Bash {
   private sleepFn?: (ms: number) => Promise<void>;
   private traceFn?: TraceCallback;
   private logger?: BashLogger;
-  private defenseInDepthConfig?: DefenseInDepthConfig | boolean;
   private coverageWriter?: FeatureCoverageWriter;
   private jsBootstrapCode?: string;
   private invokeToolFn?: (
@@ -380,10 +342,6 @@ export class Bash {
 
     // Store logger if provided
     this.logger = options.logger;
-
-    // Preserve the historical enabled default. Older supported Nodes use the
-    // strongest scoped controls they expose and report loader-hook capability.
-    this.defenseInDepthConfig = options.defenseInDepth ?? true;
 
     // Store coverage writer if provided (for fuzzing instrumentation)
     this.coverageWriter = options.coverage;
@@ -536,7 +494,6 @@ export class Bash {
   private registerCommandInternal(
     command: Command,
     isExtension: boolean,
-    trusted = isExtension ? (command.trusted ?? true) : command.trusted,
   ): void {
     const registeredCommand = this.commands.get(command.name);
     const originalCommand = isExtension
@@ -547,7 +504,6 @@ export class Bash {
       : undefined;
     const runtimeCommand: RuntimeCommand = {
       name: command.name,
-      trusted,
       internalIsExtension: isExtension,
       internalOriginalCommand: originalCommand,
       execute: (args, context) => command.execute(args, context),
@@ -812,15 +768,7 @@ export class Bash {
         normalized = normalizeScript(commandLine);
       }
 
-      // Activate defense-in-depth box if configured
-      // This wraps execution in AsyncLocalStorage context for context-aware blocking
-      const defenseBox = this.defenseInDepthConfig
-        ? DefenseInDepthBox.getInstance(this.defenseInDepthConfig)
-        : null;
-      const defenseHandle = defenseBox?.activate();
-
       try {
-        // Run execution inside defense-in-depth context if enabled
         const executeScript = async (): Promise<BashExecResult> => {
           let ast = parse(normalized, {
             maxHeredocSize: this.limits.maxHeredocSize,
@@ -861,7 +809,6 @@ export class Bash {
             sleep: this.sleepFn,
             trace: this.traceFn,
             coverage: this.coverageWriter,
-            requireDefenseContext: defenseBox?.isEnabled() === true,
             jsBootstrapCode: this.jsBootstrapCode,
             invokeTool: this.invokeToolFn,
           };
@@ -876,10 +823,6 @@ export class Bash {
           return finishResult(execResult);
         };
 
-        // If defense-in-depth is enabled, run within the protected context
-        if (defenseHandle) {
-          return await defenseHandle.run(executeScript);
-        }
         return await executeScript();
       } catch (error) {
         // ExitError propagates from 'exit' builtin (including via eval/source)
@@ -929,15 +872,6 @@ export class Bash {
             env: mapToRecordWithExtras(this.state.env, effectiveOptions.env),
           });
         }
-        // SecurityViolationError is thrown when defense-in-depth detects a blocked operation
-        if (error instanceof SecurityViolationError) {
-          return finishResult({
-            stdout: "",
-            stderr: `bash: security violation: ${sanitizeErrorMessage(error.message)}\n`,
-            exitCode: 1,
-            env: mapToRecordWithExtras(this.state.env, effectiveOptions.env),
-          });
-        }
         if ((error as ParseException).name === "ParseException") {
           return finishResult({
             stdout: "",
@@ -965,9 +899,6 @@ export class Bash {
           });
         }
         throw error;
-      } finally {
-        // Always deactivate defense-in-depth box when done
-        defenseHandle?.deactivate();
       }
     } catch (error) {
       if (error instanceof ExecutionAbortedError) {

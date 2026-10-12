@@ -75,21 +75,6 @@ export {
 } from "./fs/mountable-fs/index.js";
 // Parser
 export { parse } from "./parser/parser.js";
-// Security module - defense-in-depth
-export type {
-  DefenseInDepthConfig,
-  DefenseInDepthHandle,
-  DefenseInDepthStats,
-  DefenseInDepthStatus,
-  SecurityViolation,
-  SecurityViolationType,
-} from "./security/index.js";
-export {
-  createConsoleViolationCallback,
-  DefenseInDepthBox,
-  SecurityViolationError,
-  SecurityViolationLogger,
-} from "./security/index.js";
 // Transform API
 export { BashTransformPipeline } from "./transform/pipeline.js";
 export type { CommandCollectorMetadata } from "./transform/plugins/command-collector.js";

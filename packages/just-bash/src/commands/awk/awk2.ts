@@ -9,11 +9,6 @@ import { rethrowFatalExecutionError } from "../../fatal-execution-error.js";
 import { mapToRecord } from "../../helpers/env.js";
 import { ExecutionLimitError } from "../../interpreter/errors.js";
 import { ConstantRegex, createUserRegex } from "../../regex/index.js";
-import {
-  assertDefenseContext,
-  awaitWithDefenseContext,
-} from "../../security/defense-context.js";
-import { SecurityViolationError } from "../../security/defense-in-depth-box.js";
 import type {
   ExecResult,
   RuntimeCommand,
@@ -47,13 +42,6 @@ export const awkCommand2: RuntimeCommand = {
     args: string[],
     ctx: RuntimeCommandContext,
   ): Promise<ExecResult> {
-    assertDefenseContext(ctx.requireDefenseContext, "awk", "execution entry");
-    const withDefenseContext = <T>(
-      phase: string,
-      op: () => Promise<T>,
-    ): Promise<T> =>
-      awaitWithDefenseContext(ctx.requireDefenseContext, "awk", phase, op);
-
     if (hasHelpFlag(args)) {
       return showHelp(awkHelp);
     }
@@ -130,20 +118,11 @@ export const awkCommand2: RuntimeCommand = {
       appendFile: async (path: string, content: string) => {
         // Append by reading existing content and writing back
         try {
-          const existing = await withDefenseContext("appendFile read", () =>
-            ctx.fs.readFile(path),
-          );
-          await withDefenseContext("appendFile write", () =>
-            ctx.fs.writeFile(path, existing + content),
-          );
-        } catch (e) {
-          if (e instanceof SecurityViolationError) {
-            throw e;
-          }
+          const existing = await ctx.fs.readFile(path);
+          await ctx.fs.writeFile(path, existing + content);
+        } catch {
           // File doesn't exist, just write
-          await withDefenseContext("appendFile create", () =>
-            ctx.fs.writeFile(path, content),
-          );
+          await ctx.fs.writeFile(path, content);
         }
       },
       resolvePath: ctx.fs.resolvePath.bind(ctx.fs),
@@ -163,13 +142,9 @@ export const awkCommand2: RuntimeCommand = {
       cwd: ctx.cwd,
       // Wrap ctx.exec to match the expected signature for command pipe getline
       exec: execFn
-        ? (cmd: string) =>
-            withDefenseContext("command pipe exec", () =>
-              execFn(cmd, { cwd: ctx.cwd, signal: ctx.signal }),
-            )
+        ? (cmd: string) => execFn(cmd, { cwd: ctx.cwd, signal: ctx.signal })
         : undefined,
       coverage: ctx.coverage,
-      requireDefenseContext: ctx.requireDefenseContext,
     });
     runtimeCtx.FS = fieldSepStr;
     // Use Object.assign with null-prototype to preserve safety
@@ -201,12 +176,10 @@ export const awkCommand2: RuntimeCommand = {
 
     // Execute BEGIN blocks
     try {
-      await withDefenseContext("BEGIN execution", () => interp.executeBegin());
+      await interp.executeBegin();
       if (runtimeCtx.shouldExit) {
         // exit in BEGIN still runs END blocks (AWK semantics)
-        await withDefenseContext("END execution after BEGIN exit", () =>
-          interp.executeEnd(),
-        );
+        await interp.executeEnd();
         return {
           stdout: interp.getOutput(),
           stderr: "",
@@ -275,9 +248,7 @@ export const awkCommand2: RuntimeCommand = {
         while (runtimeCtx.lineIndex < lines.length - 1) {
           runtimeCtx.lineIndex++;
           const activeLineIndex = runtimeCtx.lineIndex;
-          await withDefenseContext("line execution", () =>
-            interp.executeLine(lines[activeLineIndex]),
-          );
+          await interp.executeLine(lines[activeLineIndex]);
           if (runtimeCtx.shouldExit || runtimeCtx.shouldNextFile) break;
         }
       };
@@ -287,23 +258,16 @@ export const awkCommand2: RuntimeCommand = {
           let content: string;
           try {
             const filePath = ctx.fs.resolvePath(ctx.cwd, file);
-            const stat = await withDefenseContext("input file stat", () =>
-              ctx.fs.stat(filePath),
-            );
+            const stat = await ctx.fs.stat(filePath);
             if (stat.size > maxInputBytes - aggregateInputBytes) {
               throw new ExecutionLimitError(
                 `aggregate input size limit exceeded (${maxInputBytes} bytes)`,
                 "string_length",
               );
             }
-            content = await withDefenseContext("input file read", () =>
-              ctx.fs.readFile(filePath),
-            );
+            content = await ctx.fs.readFile(filePath);
           } catch (e) {
-            if (
-              e instanceof SecurityViolationError ||
-              e instanceof ExecutionLimitError
-            ) {
+            if (e instanceof ExecutionLimitError) {
               throw e;
             }
             return {
@@ -312,21 +276,17 @@ export const awkCommand2: RuntimeCommand = {
               exitCode: 1,
             };
           }
-          await withDefenseContext("input processing", () =>
-            processInput(file, content),
-          );
+          await processInput(file, content);
           if (runtimeCtx.shouldExit) break;
         }
       } else {
         // awk parses fields with regex / FS — decode bytes to UTF-8 so
         // non-ASCII data isn't split mid-codepoint.
-        await withDefenseContext("stdin processing", () =>
-          processInput("", decodeBytesToUtf8(ctx.stdin)),
-        );
+        await processInput("", decodeBytesToUtf8(ctx.stdin));
       }
 
       // Execute END blocks (always run, even after exit - AWK semantics)
-      await withDefenseContext("END execution", () => interp.executeEnd());
+      await interp.executeEnd();
 
       // awk emits text; the pipeline handles encoding.
       return {
@@ -335,9 +295,6 @@ export const awkCommand2: RuntimeCommand = {
         exitCode: interp.getExitCode(),
       };
     } catch (e) {
-      if (e instanceof SecurityViolationError) {
-        throw e;
-      }
       // Handle errors during execution
       const msg = e instanceof Error ? e.message : String(e);
       const exitCode =

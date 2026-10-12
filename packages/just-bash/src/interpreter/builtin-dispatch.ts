@@ -13,12 +13,6 @@ import {
 } from "../execution-scope.js";
 import { getFileSystemIdentity, isFileSystemIdentity } from "../fs/identity.js";
 import { sanitizeErrorMessage } from "../fs/sanitize-error.js";
-import { awaitWithDefenseContext } from "../security/defense-context.js";
-import {
-  DefenseInDepthBox,
-  SecurityViolationError,
-} from "../security/defense-in-depth-box.js";
-import { _Proxy } from "../security/trusted-globals.js";
 import { _clearFiniteTimeout, _setTimeoutIfFinite } from "../timers.js";
 import type {
   ExecResult,
@@ -59,7 +53,6 @@ import {
   resolveCommand as resolveCommandHelper,
 } from "./command-resolution.js";
 import { evaluateTestArgs } from "./conditionals.js";
-import { createDefenseAwareCommandContext } from "./defense-aware-command-context.js";
 import {
   ExecutionAbortedError,
   ExecutionLimitError,
@@ -222,7 +215,7 @@ function createRevocableCommandContext(
     }
 
     const methods = new Map<PropertyKey, unknown>();
-    const proxy = new _Proxy(value, {
+    const proxy = new Proxy(value, {
       get(object, property) {
         assertActive();
         if (
@@ -908,7 +901,6 @@ export async function executeExternalCommand(
     xpgEcho: ctx.state.shoptOptions.xpg_echo,
     coverage: ctx.coverage,
     signal: ctx.state.signal,
-    requireDefenseContext: ctx.requireDefenseContext,
     jsBootstrapCode: ctx.jsBootstrapCode,
     invokeTool: ctx.invokeTool,
   };
@@ -930,24 +922,11 @@ export async function executeExternalCommand(
       originalCmdCtx,
       originalCommand.name,
     );
-    const guardedOriginalCmdCtx = createDefenseAwareCommandContext(
-      originalRevocable.context,
-      originalCommand.name,
-    );
     revokeOriginalCommandContext = originalRevocable.revoke;
-    cmdCtx.origCommand = (originalArgs) => {
-      const executeOriginal = () =>
-        originalCommand.execute(originalArgs, guardedOriginalCmdCtx);
-      return originalCommand.trusted
-        ? DefenseInDepthBox.runTrustedAsync(executeOriginal)
-        : DefenseInDepthBox.runUntrustedAsync(executeOriginal);
-    };
+    cmdCtx.origCommand = (originalArgs) =>
+      originalCommand.execute(originalArgs, originalRevocable.context);
   }
   const revocable = createRevocableCommandContext(cmdCtx, commandName);
-  const guardedCmdCtx = createDefenseAwareCommandContext(
-    revocable.context,
-    commandName,
-  );
   const revokeCommandContexts = () => {
     revocable.revoke();
     revokeOriginalCommandContext();
@@ -955,27 +934,19 @@ export async function executeExternalCommand(
 
   try {
     const runCommand = (): Promise<ExecResult> =>
-      awaitWithDefenseContext(
-        ctx.requireDefenseContext,
-        "command",
-        `${commandName} execution`,
-        () => cmd.execute(args, guardedCmdCtx),
-      );
+      cmd.execute(args, revocable.context);
 
     const runBoundedCommand = () =>
       runWithExecutionDeadline(
         runCommand,
-        guardedCmdCtx,
+        revocable.context,
         revokeCommandContexts,
         commandName,
         ctx.executionScope,
         ctx.state.signal,
       );
 
-    const commandResult = cmd.trusted
-      ? // Trusted host-extension commands may opt in to unrestricted globals.
-        await DefenseInDepthBox.runTrustedAsync(runBoundedCommand)
-      : await runBoundedCommand();
+    const commandResult = await runBoundedCommand();
     return {
       ...commandResult,
       internalStdinConsumed:
@@ -988,10 +959,6 @@ export async function executeExternalCommand(
       throw error;
     }
     if (error instanceof ExecutionAbortedError) {
-      throw error;
-    }
-    // Security violations must propagate to top-level error handling
-    if (error instanceof SecurityViolationError) {
       throw error;
     }
     return failure(

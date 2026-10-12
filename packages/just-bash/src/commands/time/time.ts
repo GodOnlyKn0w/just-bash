@@ -2,7 +2,6 @@ import { latin1FromBytes } from "../../encoding.js";
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import { mapToRecord } from "../../helpers/env.js";
 import { shellJoinArgs } from "../../helpers/shell-quote.js";
-import { _performanceNow } from "../../security/trusted-globals.js";
 import type {
   ExecResult,
   RuntimeCommand,
@@ -107,7 +106,7 @@ export const timeCommand: RuntimeCommand = {
     }
 
     // Record start time
-    const startTime = _performanceNow();
+    const startTime = performance.now();
 
     // Execute the command
     const displayCommand = commandArgs.join(" ");
@@ -140,7 +139,7 @@ export const timeCommand: RuntimeCommand = {
     }
 
     // Record end time
-    const endTime = _performanceNow();
+    const endTime = performance.now();
     const elapsedSeconds = (endTime - startTime) / 1000;
 
     // Format the timing output

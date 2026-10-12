@@ -48,7 +48,7 @@ export interface SecurityCheckResult {
 /**
  * Check if output contains native JavaScript code indicators.
  */
-export function checkForNativeCode(output: string): SecurityCheckResult {
+function checkForNativeCode(output: string): SecurityCheckResult {
   const issues: string[] = [];
 
   for (const pattern of NATIVE_CODE_PATTERNS) {
@@ -64,9 +64,7 @@ export function checkForNativeCode(output: string): SecurityCheckResult {
 /**
  * Check if output contains prototype pollution indicators.
  */
-export function checkForPollutionIndicators(
-  output: string,
-): SecurityCheckResult {
+function checkForPollutionIndicators(output: string): SecurityCheckResult {
   const issues: string[] = [];
 
   for (const pattern of POLLUTION_INDICATOR_PATTERNS) {
@@ -82,7 +80,7 @@ export function checkForPollutionIndicators(
 /**
  * Combined security check for output.
  */
-export function checkOutputSecurity(output: string): SecurityCheckResult {
+function checkOutputSecurity(output: string): SecurityCheckResult {
   const nativeCheck = checkForNativeCode(output);
   const pollutionCheck = checkForPollutionIndicators(output);
 
@@ -90,44 +88,6 @@ export function checkOutputSecurity(output: string): SecurityCheckResult {
     safe: nativeCheck.safe && pollutionCheck.safe,
     issues: [...nativeCheck.issues, ...pollutionCheck.issues],
   };
-}
-
-/**
- * Assert that output does not contain native JavaScript code.
- * Use this in tests to verify bash/jq output is safe.
- *
- * @example
- * const result = await env.exec("echo ${__proto__}");
- * assertNoNativeCode(result.stdout);
- * assertNoNativeCode(result.stderr);
- */
-export function assertNoNativeCode(
-  output: string | undefined,
-  context?: string,
-): void {
-  const result = checkForNativeCode(output || "");
-  const message = context
-    ? `${context}: ${result.issues.join(", ")}`
-    : result.issues.join(", ");
-  expect(result.safe, message).toBe(true);
-}
-
-/**
- * Assert that output does not contain prototype pollution indicators.
- *
- * @example
- * const result = await env.exec("echo ${constructor}");
- * assertNoPollutionIndicators(result.stdout);
- */
-export function assertNoPollutionIndicators(
-  output: string | undefined,
-  context?: string,
-): void {
-  const result = checkForPollutionIndicators(output || "");
-  const message = context
-    ? `${context}: ${result.issues.join(", ")}`
-    : result.issues.join(", ");
-  expect(result.safe, message).toBe(true);
 }
 
 /**
@@ -139,10 +99,7 @@ export function assertNoPollutionIndicators(
  * assertOutputSafe(result.stdout, "stdout");
  * assertOutputSafe(result.stderr, "stderr");
  */
-export function assertOutputSafe(
-  output: string | undefined,
-  context?: string,
-): void {
+function assertOutputSafe(output: string | undefined, context?: string): void {
   const result = checkOutputSecurity(output || "");
   const message = context
     ? `${context}: ${result.issues.join(", ")}`

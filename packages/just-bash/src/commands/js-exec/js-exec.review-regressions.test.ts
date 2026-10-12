@@ -1,4 +1,3 @@
-import * as nodeModule from "node:module";
 import { describe, expect, it, vi } from "vitest";
 import { Bash } from "../../Bash.js";
 import { defineCommand } from "../../custom-commands.js";
@@ -389,31 +388,5 @@ describe("js-exec run adapter regressions", () => {
       "js-exec: JavaScript runtime exceeded the 2 bridge request limit.\n",
     );
     expect(result.exitCode).toBe(1);
-  });
-
-  it.runIf(
-    typeof (nodeModule as { registerHooks?: unknown }).registerHooks ===
-      "function",
-  )("re-enters an untrusted boundary before ctx.exec", async () => {
-    const probe = defineCommand(
-      "host-trust-probe",
-      async () => {
-        try {
-          await import("node:child_process");
-          return { exitCode: 0, stderr: "", stdout: "UNBLOCKED\n" };
-        } catch {
-          return { exitCode: 0, stderr: "", stdout: "BLOCKED\n" };
-        }
-      },
-      { trusted: false },
-    );
-    const bash = new Bash({ customCommands: [probe], javascript: true });
-    const result = await bash.exec(
-      `js-exec -c "console.log(require('child_process').execSync('host-trust-probe').trim())"`,
-    );
-
-    expect(result.stdout).toBe("BLOCKED\n");
-    expect(result.stderr).toBe("");
-    expect(result.exitCode).toBe(0);
   });
 });

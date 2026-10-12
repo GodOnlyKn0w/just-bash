@@ -14,7 +14,6 @@ Instructions for AI agents using just-bash in projects.
 A sandboxed bash interpreter with an in-memory virtual filesystem. Use it when you need to:
 
 - Execute shell commands without real filesystem access
-- Run untrusted scripts safely
 - Process text with standard Unix tools (grep, sed, awk, jq, etc.)
 
 ## For AI Agents

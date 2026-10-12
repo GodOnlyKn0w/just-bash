@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { Bash } from "./Bash.js";
-import { _promiseThen } from "./security/trusted-globals.js";
 import { withUnhandledRejectionsTracked } from "./test-utils/unhandled-rejections.js";
 import type { Command } from "./types.js";
 
@@ -102,14 +101,13 @@ describe("lazy custom command loading", () => {
     expect(loadCalls).toBe(2);
   });
 
-  it("uses a load that resolved after an untrusted invocation was cancelled", async () => {
+  it("uses a load that resolved after an invocation was cancelled", async () => {
     const { gate, release } = createLoadGate();
     let loadCalls = 0;
     const bash = new Bash({
       customCommands: [
         {
           name: "late-load",
-          trusted: false,
           load: async () => {
             loadCalls += 1;
             await gate;
@@ -135,12 +133,10 @@ describe("lazy custom command loading", () => {
 
   it("does not run a loader-controlled promise method", async () => {
     let thenCalls = 0;
-    let blockedGlobalReachable: boolean | undefined;
     const bash = new Bash({
       customCommands: [
         {
           name: "custom-then",
-          trusted: false,
           load: () => {
             const promise = Promise.resolve(loadedCommand("custom-then"));
             // The loader controls this method; whoever calls it runs loader code.
@@ -148,13 +144,7 @@ describe("lazy custom command loading", () => {
             Object.defineProperty(promise, "then", {
               value: (onFulfilled?: unknown, onRejected?: unknown) => {
                 thenCalls += 1;
-                try {
-                  Function("return 42")();
-                  blockedGlobalReachable = true;
-                } catch {
-                  blockedGlobalReachable = false;
-                }
-                return _promiseThen.call(
+                return Promise.prototype.then.call(
                   promise,
                   onFulfilled as () => unknown,
                   onRejected as () => unknown,
@@ -172,19 +162,16 @@ describe("lazy custom command loading", () => {
     expect(result.stdout).toBe("LOADED\n");
     expect(result.stderr).toBe("");
     expect(result.exitCode).toBe(0);
-    // Nothing the loader controls may run with blocking suspended.
-    expect(blockedGlobalReachable).not.toBe(true);
     expect(thenCalls).toBe(0);
   });
 
-  it("retries a load that failed after an untrusted invocation was cancelled", async () => {
+  it("retries a load that failed after an invocation was cancelled", async () => {
     const { gate, release } = createLoadGate();
     let loadCalls = 0;
     const bash = new Bash({
       customCommands: [
         {
           name: "late-failure-load",
-          trusted: false,
           load: async () => {
             loadCalls += 1;
             if (loadCalls === 1) {

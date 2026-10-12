@@ -7,11 +7,6 @@
 import { decodeBytesToUtf8 } from "../../encoding.js";
 import { sanitizeErrorMessage } from "../../fs/sanitize-error.js";
 import { ExecutionLimitError } from "../../interpreter/errors.js";
-import {
-  assertDefenseContext,
-  awaitWithDefenseContext,
-} from "../../security/defense-context.js";
-import { SecurityViolationError } from "../../security/defense-in-depth-box.js";
 import type {
   ExecResult,
   RuntimeCommand,
@@ -254,13 +249,6 @@ export const jqCommand: RuntimeCommand = {
     args: string[],
     ctx: RuntimeCommandContext,
   ): Promise<ExecResult> {
-    assertDefenseContext(ctx.requireDefenseContext, "jq", "execution entry");
-    const withDefenseContext = <T>(
-      phase: string,
-      op: () => Promise<T>,
-    ): Promise<T> =>
-      awaitWithDefenseContext(ctx.requireDefenseContext, "jq", phase, op);
-
     if (hasHelpFlag(args)) return showHelp(jqHelp);
 
     let raw = false;
@@ -408,12 +396,10 @@ export const jqCommand: RuntimeCommand = {
     // Read files bound via --rawfile/--slurpfile through the shared file
     // reader so they get the same security posture as normal input files.
     if (fileBindings.length > 0) {
-      const result = await withDefenseContext("arg file read", () =>
-        readFiles(
-          ctx,
-          fileBindings.map((b) => b.file),
-          { cmdName: "jq", stopOnError: true },
-        ),
+      const result = await readFiles(
+        ctx,
+        fileBindings.map((b) => b.file),
+        { cmdName: "jq", stopOnError: true },
       );
       if (result.exitCode !== 0) {
         return { stdout: "", stderr: result.stderr, exitCode: 2 };
@@ -447,12 +433,10 @@ export const jqCommand: RuntimeCommand = {
       inputs.push({ source: "stdin", content: decodeBytesToUtf8(ctx.stdin) });
     } else {
       // Read all files in parallel using shared utility
-      const result = await withDefenseContext("file read", () =>
-        readFiles(ctx, files, {
-          cmdName: "jq",
-          stopOnError: true,
-        }),
-      );
+      const result = await readFiles(ctx, files, {
+        cmdName: "jq",
+        stopOnError: true,
+      });
       if (result.exitCode !== 0) {
         return {
           stdout: "",
@@ -488,7 +472,6 @@ export const jqCommand: RuntimeCommand = {
         namedArgs,
         positionalArgs,
         coverage: ctx.coverage,
-        requireDefenseContext: ctx.requireDefenseContext,
         budget: { operations: 0, callDepth: 0 },
       };
       const appendValues = (target: QueryValue[], next: QueryValue[]): void => {
@@ -622,9 +605,6 @@ export const jqCommand: RuntimeCommand = {
         exitCode,
       };
     } catch (e) {
-      if (e instanceof SecurityViolationError) {
-        throw e;
-      }
       if (e instanceof ExecutionLimitError) {
         const message = sanitizeErrorMessage(e.message);
         return {
