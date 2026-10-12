@@ -42,7 +42,6 @@
     "dist/commands/sqlite3/worker.js",
     "dist/fs/**/*.d.ts",
     "dist/interpreter/**/*.d.ts",
-    "dist/network/**/*.d.ts",
     "dist/parser/*.d.ts",
     "dist/transform/**/*.d.ts",
     "dist/utils/*.d.ts",
