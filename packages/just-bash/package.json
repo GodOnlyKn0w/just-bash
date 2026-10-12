@@ -48,7 +48,6 @@
     "dist/utils/*.d.ts",
     "vendor/cpython-emscripten/",
     "README.md",
-    "CHANGELOG.md",
     "dist/AGENTS.md"
   ],
   "publishConfig": {
