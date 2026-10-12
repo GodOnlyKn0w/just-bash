@@ -97,7 +97,7 @@ duplicating internal defaults.
 
 ### Version Control
 
-`git` (subcommands init, add, commit, status, diff, log, and stash; any other subcommand or option exits with 129)
+`git` (subcommands init, add, commit, status, diff, log, stash, show, rev-parse, branch, switch, checkout, restore, reset, rm, and mv; any other subcommand or option exits with 129)
 
 ### Navigation & Environment
 

@@ -1,4 +1,18 @@
 {
+  "00cb00af0792848c": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git rev-parse HEAD 2>/dev/null; echo $?; git rev-parse --abbrev-ref HEAD 2>/dev/null; echo $?",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "HEAD\n128\nHEAD\n128\n",
+    "stderr": "",
+    "exitCode": 0
+  },
   "0a20c9e73ab48e23": {
     "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; git add -A; git commit -m second -m 'A body.' >/dev/null; git log; git log --oneline",
     "files": {
@@ -41,6 +55,20 @@
     "stderr": "",
     "exitCode": 0
   },
+  "189ba56df709c1e8": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; git checkout -b feature 2>/dev/null; echo f > f.txt; git add f.txt; git commit -m feature >/dev/null; git checkout master 2>/dev/null; git branch; git checkout -b other feature 2>/dev/null; git log --oneline; echo local >> a.txt; rm sub/y.txt; git checkout -- a.txt sub; git status -s; echo local >> a.txt; git checkout a.txt 2>/dev/null; git status -s; git checkout HEAD~1 2>/dev/null; git status; git branch; git rev-parse --abbrev-ref HEAD; git checkout nosuch 2>/dev/null; echo $?",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "  feature\n* master\nc3550aa feature\n4b26c29 first\nHEAD detached at 4b26c29\nnothing to commit, working tree clean\n* (HEAD detached at 4b26c29)\n  feature\n  master\n  other\nHEAD\n1\n",
+    "stderr": "",
+    "exitCode": 0
+  },
   "205ff5f446a6f74d": {
     "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; chmod +x a.txt; git add -A; git commit -am second; git log --format=%H",
     "files": {
@@ -80,6 +108,20 @@
       "build/out.js": "out\n"
     },
     "stdout": "diff --git a/a.txt b/a.txt\nindex 4cb29ea..ea14db2 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+2\n three\n+four\n sub/deep/x.txt | 1 -\n sub/y.txt      | 1 -\n 2 files changed, 2 deletions(-)\na.txt\nsub/deep/x.txt\ndiff --git a/sub/y.txt b/sub/y.txt\ndeleted file mode 100644\nindex 975fbec..0000000\n--- a/sub/y.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-y\ndiff --git a/a.txt b/a.txt\nindex 4cb29ea..ea14db2 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+2\n three\n+four\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "23252447bd0f6255": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; git switch -c feature 2>/dev/null; echo changed >> a.txt; echo f > f.txt; git add .; git commit -m feature >/dev/null; git switch master 2>/dev/null; echo local >> a.txt; git switch feature 2>/dev/null; echo $?; git checkout -- a.txt; echo mine > f.txt; git switch feature 2>/dev/null; echo $?; git status -s; git branch",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "1\n1\n?? f.txt\n  feature\n* master\n",
     "stderr": "",
     "exitCode": 0
   },
@@ -181,6 +223,48 @@
     "stderr": "",
     "exitCode": 0
   },
+  "4581dda177f3380b": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; git add -A; git commit -m second >/dev/null; git show HEAD:a.txt; git show HEAD~1:a.txt; git show HEAD:sub; git show HEAD:; git show HEAD~1:sub/y.txt HEAD:new.txt; git show HEAD:nosuch 2>/dev/null; echo $?",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "one\n2\nthree\nfour\none\ntwo\nthree\ntree HEAD:sub\n\ndeep/\ntree HEAD:\n\n.gitignore\na.txt\nb.bin\nnew.txt\nother/\nsub/\ny\nn\n128\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "471ff6df8857acd3": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; git add -A; git commit -m second >/dev/null; echo three >> new.txt; git commit -am third >/dev/null; git reset HEAD~1; git log --oneline; git status -s; git add -A; git reset new.txt; git status -s; git reset -- a.txt; git reset HEAD~1 -- a.txt; git status -s; git reset --hard HEAD~1; git log --oneline; git status -s; git reset nosuch 2>/dev/null; echo $?",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "Unstaged changes after reset:\nM\tnew.txt\n34cf08e second\n4b26c29 first\n M new.txt\nUnstaged changes after reset:\nM\tnew.txt\n M new.txt\nUnstaged changes after reset:\nM\tnew.txt\nUnstaged changes after reset:\nM\ta.txt\nM\tnew.txt\nMM a.txt\n M new.txt\nHEAD is now at 4b26c29 first\n4b26c29 first\n128\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "4f761177dc95f752": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; git rm sub/y.txt; git status -s; ls sub; git rm sub 2>/dev/null; echo $?; git rm -r sub; git status -s; ls; git rm --cached a.txt; git status -s; git rm nosuch 2>/dev/null; echo $?; git commit -m removed",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "rm 'sub/y.txt'\nD  sub/y.txt\ndeep\n128\nrm 'sub/deep/x.txt'\nD  sub/deep/x.txt\nD  sub/y.txt\na.txt\nbuild\nt.log\nrm 'a.txt'\nD  a.txt\nD  sub/deep/x.txt\nD  sub/y.txt\n?? a.txt\n128\n[master 9090dff] removed\n Author: A U Thor <author@example.com>\n 3 files changed, 5 deletions(-)\n delete mode 100644 a.txt\n delete mode 100644 sub/deep/x.txt\n delete mode 100644 sub/y.txt\n",
+    "stderr": "",
+    "exitCode": 0
+  },
   "598d0feec6c29319": {
     "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; git add a.txt; git status -s; git add sub; git status -s; git add .; git status -s",
     "files": {
@@ -237,6 +321,34 @@
     "stderr": "",
     "exitCode": 0
   },
+  "5ebb113fdc98e341": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; echo local >> a.txt; git rm a.txt 2>/dev/null; echo $?; echo n > n.txt; git add n.txt; git rm n.txt 2>/dev/null; echo $?; git rm --cached n.txt; echo staged >> sub/y.txt; git add sub/y.txt; echo local >> sub/y.txt; git rm --cached sub/y.txt 2>/dev/null; echo $?; git rm -f a.txt sub/y.txt; git status -s; (cd sub; git rm deep/x.txt; git status -s)",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "1\n1\nrm 'n.txt'\n1\nrm 'a.txt'\nrm 'sub/y.txt'\nD  a.txt\nD  sub/y.txt\n?? n.txt\nrm 'sub/deep/x.txt'\nD  ../a.txt\nD  deep/x.txt\nD  y.txt\n?? ../n.txt\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "5f6652fee7c6cbba": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git branch; git branch early 2>/dev/null; echo $?; git add . && git commit -m first >/dev/null; git branch; git branch feature; git branch zeta HEAD; git branch; git branch feature 2>/dev/null; echo $?; git branch -d feature; git branch -d nosuch 2>/dev/null; echo $?; git branch -d master 2>/dev/null; echo $?; git branch",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "128\n* master\n  feature\n* master\n  zeta\n128\nDeleted branch feature (was 4b26c29).\n1\n1\n* master\n  zeta\n",
+    "stderr": "",
+    "exitCode": 0
+  },
   "685a1d66cc1c857c": {
     "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git log 2>/dev/null; echo $?",
     "files": {
@@ -248,6 +360,20 @@
       "build/out.js": "out\n"
     },
     "stdout": "128\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "69c30e929d92cf74": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; git switch -c feature 2>/dev/null; echo f > f.txt; git add f.txt; git commit -m feature >/dev/null; git switch master 2>/dev/null; git branch -d feature 2>/dev/null; echo $?; git branch -D feature; git branch",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "1\nDeleted branch feature (was c3550aa).\n* master\n",
     "stderr": "",
     "exitCode": 0
   },
@@ -276,6 +402,34 @@
       "build/out.js": "out\n"
     },
     "stdout": "4972d23 third\n34cf08e second\n4972d23 third\n4972d23 third\n4972d23 third\n34cf08e second\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "784f6b5692f79e8a": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; git mv a.txt b.txt; git status -s; mkdir dir; git mv b.txt dir; git status -s; git mv sub moved; git status -s; ls moved moved/deep; git mv nosuch x 2>/dev/null; echo $?; git mv dir/b.txt moved/y.txt 2>/dev/null; echo $?; echo u > untracked.txt; git mv untracked.txt other.txt 2>/dev/null; echo $?; git commit -m moved",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "R  a.txt -> b.txt\nR  a.txt -> dir/b.txt\nR  a.txt -> dir/b.txt\nR  sub/deep/x.txt -> moved/deep/x.txt\nR  sub/y.txt -> moved/y.txt\nmoved:\ndeep\ny.txt\n\nmoved/deep:\nx.txt\n128\n128\n128\n[master 82e9113] moved\n Author: A U Thor <author@example.com>\n 3 files changed, 0 insertions(+), 0 deletions(-)\n rename a.txt => dir/b.txt (100%)\n rename {sub => moved}/deep/x.txt (100%)\n rename {sub => moved}/y.txt (100%)\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "78b9570cfe1b66b9": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; git add -A; git commit -m second -m 'Body text.' >/dev/null; git show; git show --stat; git show HEAD~1 --stat; git show HEAD~1; git show HEAD~5 2>/dev/null; echo $?",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "commit be146b94018524f6fc29be5a9086d0dbfe699dbb\nAuthor: A U Thor <author@example.com>\nDate:   Wed Nov 15 06:13:20 2023 +0800\n\n    second\n    \n    Body text.\n\ndiff --git a/a.txt b/a.txt\nindex 4cb29ea..ea14db2 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+2\n three\n+four\ndiff --git a/b.bin b/b.bin\nnew file mode 100644\nindex 0000000..88768ef\nBinary files /dev/null and b/b.bin differ\ndiff --git a/new.txt b/new.txt\nnew file mode 100644\nindex 0000000..8ba3a16\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+n\ndiff --git a/other/dir/o.txt b/other/dir/o.txt\nnew file mode 100644\nindex 0000000..13e7564\n--- /dev/null\n+++ b/other/dir/o.txt\n@@ -0,0 +1 @@\n+o\ndiff --git a/sub/deep/x.txt b/sub/deep/z.txt\nsimilarity index 100%\nrename from sub/deep/x.txt\nrename to sub/deep/z.txt\ndiff --git a/sub/y.txt b/sub/y.txt\ndeleted file mode 100644\nindex 975fbec..0000000\n--- a/sub/y.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-y\ncommit be146b94018524f6fc29be5a9086d0dbfe699dbb\nAuthor: A U Thor <author@example.com>\nDate:   Wed Nov 15 06:13:20 2023 +0800\n\n    second\n    \n    Body text.\n\n a.txt                     |   3 ++-\n b.bin                     | Bin 0 -> 5 bytes\n new.txt                   |   1 +\n other/dir/o.txt           |   1 +\n sub/deep/{x.txt => z.txt} |   0\n sub/y.txt                 |   1 -\n 6 files changed, 4 insertions(+), 2 deletions(-)\ncommit 4b26c29621143d2c44bb971ffe91c4e2184eec48\nAuthor: A U Thor <author@example.com>\nDate:   Wed Nov 15 06:13:20 2023 +0800\n\n    first\n\n .gitignore     | 2 ++\n a.txt          | 3 +++\n sub/deep/x.txt | 1 +\n sub/y.txt      | 1 +\n 4 files changed, 7 insertions(+)\ncommit 4b26c29621143d2c44bb971ffe91c4e2184eec48\nAuthor: A U Thor <author@example.com>\nDate:   Wed Nov 15 06:13:20 2023 +0800\n\n    first\n\ndiff --git a/.gitignore b/.gitignore\nnew file mode 100644\nindex 0000000..749504c\n--- /dev/null\n+++ b/.gitignore\n@@ -0,0 +1,2 @@\n+*.log\n+build/\ndiff --git a/a.txt b/a.txt\nnew file mode 100644\nindex 0000000..4cb29ea\n--- /dev/null\n+++ b/a.txt\n@@ -0,0 +1,3 @@\n+one\n+two\n+three\ndiff --git a/sub/deep/x.txt b/sub/deep/x.txt\nnew file mode 100644\nindex 0000000..587be6b\n--- /dev/null\n+++ b/sub/deep/x.txt\n@@ -0,0 +1 @@\n+x\ndiff --git a/sub/y.txt b/sub/y.txt\nnew file mode 100644\nindex 0000000..975fbec\n--- /dev/null\n+++ b/sub/y.txt\n@@ -0,0 +1 @@\n+y\n128\n",
     "stderr": "",
     "exitCode": 0
   },
@@ -475,6 +629,20 @@
     "stderr": "",
     "exitCode": 0
   },
+  "b20ea8105261a994": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; git rev-parse HEAD; git rev-parse --short HEAD; git rev-parse --short=10 HEAD; git rev-parse --show-toplevel | sed \"s|$PWD|DIR|\"; git rev-parse --abbrev-ref HEAD; cd sub; git rev-parse --show-toplevel | sed \"s|${PWD%/sub}|DIR|\"; git rev-parse nosuch 2>/dev/null; echo $?",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "4b26c29621143d2c44bb971ffe91c4e2184eec48\n4b26c29\n4b26c29621\nDIR\nmaster\nDIR\nnosuch\n128\n",
+    "stderr": "",
+    "exitCode": 0
+  },
   "b267fb4dccf388f9": {
     "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git commit -m none; echo $?; git add . && git commit -m first >/dev/null; git commit -m none; echo $?; echo x >> a.txt; git commit -m none; echo $?",
     "files": {
@@ -486,6 +654,20 @@
       "build/out.js": "out\n"
     },
     "stdout": "On branch master\n\nInitial commit\n\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\t.gitignore\n\ta.txt\n\tsub/\n\nnothing added to commit but untracked files present (use \"git add\" to track)\n1\nOn branch master\nnothing to commit, working tree clean\n1\nOn branch master\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   a.txt\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n1\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "b2b8fb646f2f8b04": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; git restore a.txt; git status -s; git restore sub; git status -s; git add -A; git restore --staged new.txt; git status -s; git restore --staged .; git status -s; git add a.txt 2>/dev/null; echo more >> sub/y.txt; git add -A; echo again >> sub/y.txt; git restore --staged --worktree sub/y.txt; git status -s; git restore nosuch 2>/dev/null; echo $?; git restore 2>/dev/null; echo $?",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": " D sub/deep/x.txt\n D sub/y.txt\n?? b.bin\n?? new.txt\n?? other/\n?? sub/deep/z.txt\n?? b.bin\n?? new.txt\n?? other/\n?? sub/deep/z.txt\nA  b.bin\nA  other/dir/o.txt\nA  sub/deep/z.txt\n?? new.txt\n?? b.bin\n?? new.txt\n?? other/\n?? sub/deep/z.txt\nA  b.bin\nA  new.txt\nA  other/dir/o.txt\nA  sub/deep/z.txt\n1\n128\n",
     "stderr": "",
     "exitCode": 0
   },
@@ -545,6 +727,20 @@
     "stderr": "",
     "exitCode": 0
   },
+  "d47998ab2a437ff2": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null; git switch -c feature 2>/dev/null; echo f > f.txt; git add f.txt; git commit -m feature >/dev/null; git switch master 2>/dev/null; ls; echo local >> a.txt; git switch feature; ls; git status -s; git switch feature; git switch nosuch 2>/dev/null; echo $?; git branch",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "a.txt\nbuild\nsub\nt.log\nM\ta.txt\na.txt\nbuild\nf.txt\nsub\nt.log\n M a.txt\nM\ta.txt\n128\n* feature\n  master\n",
+    "stderr": "Switched to branch 'feature'\nAlready on 'feature'\n",
+    "exitCode": 0
+  },
   "d5a71956dcf40f5b": {
     "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add a.txt sub; git diff --cached; git diff --cached --stat",
     "files": {
@@ -556,6 +752,20 @@
       "build/out.js": "out\n"
     },
     "stdout": "diff --git a/a.txt b/a.txt\nnew file mode 100644\nindex 0000000..4cb29ea\n--- /dev/null\n+++ b/a.txt\n@@ -0,0 +1,3 @@\n+one\n+two\n+three\ndiff --git a/sub/deep/x.txt b/sub/deep/x.txt\nnew file mode 100644\nindex 0000000..587be6b\n--- /dev/null\n+++ b/sub/deep/x.txt\n@@ -0,0 +1 @@\n+x\ndiff --git a/sub/y.txt b/sub/y.txt\nnew file mode 100644\nindex 0000000..975fbec\n--- /dev/null\n+++ b/sub/y.txt\n@@ -0,0 +1 @@\n+y\n a.txt          | 3 +++\n sub/deep/x.txt | 1 +\n sub/y.txt      | 1 +\n 3 files changed, 5 insertions(+)\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  "d5d64d18fd29fd82": {
+    "command": "export HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1\nexport GIT_AUTHOR_NAME='A U Thor' GIT_AUTHOR_EMAIL=author@example.com GIT_AUTHOR_DATE='@1700000000 +0800'\nexport GIT_COMMITTER_NAME='C O Mitter' GIT_COMMITTER_EMAIL=committer@example.com GIT_COMMITTER_DATE='2023-11-15T10:00:00+01:00'\ngit init >/dev/null 2>&1; git add . && git commit -m first >/dev/null\nprintf 'one\\n2\\nthree\\nfour\\n' > a.txt\nrm sub/y.txt\nmv sub/deep/x.txt sub/deep/z.txt\nprintf '\\000\\001bin' > b.bin\necho n > new.txt\nmkdir -p other/dir; echo o > other/dir/o.txt; git add -A; git commit -m second >/dev/null; echo more >> a.txt; git reset --soft HEAD~1; git status -s; git log --oneline; git reset --mixed; git status -s; git reset --hard; git status -s; git reset --hard HEAD; ls sub sub/deep",
+    "files": {
+      "a.txt": "one\ntwo\nthree\n",
+      "sub/deep/x.txt": "x\n",
+      "sub/y.txt": "y\n",
+      ".gitignore": "*.log\nbuild/\n",
+      "t.log": "log\n",
+      "build/out.js": "out\n"
+    },
+    "stdout": "MM a.txt\nA  b.bin\nA  new.txt\nA  other/dir/o.txt\nR  sub/deep/x.txt -> sub/deep/z.txt\nD  sub/y.txt\n4b26c29 first\nUnstaged changes after reset:\nM\ta.txt\nD\tsub/deep/x.txt\nD\tsub/y.txt\n M a.txt\n D sub/deep/x.txt\n D sub/y.txt\n?? b.bin\n?? new.txt\n?? other/\n?? sub/deep/z.txt\nHEAD is now at 4b26c29 first\n?? b.bin\n?? new.txt\n?? other/\n?? sub/deep/z.txt\nHEAD is now at 4b26c29 first\nsub:\ndeep\ny.txt\n\nsub/deep:\nx.txt\nz.txt\n",
     "stderr": "",
     "exitCode": 0
   },

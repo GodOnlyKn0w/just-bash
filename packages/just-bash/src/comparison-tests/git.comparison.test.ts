@@ -220,6 +220,72 @@ describe("git command - Real Bash Comparison", () => {
       "stash pop onto a changed file",
       `${COMMITTED}; echo 1 >> a.txt; git stash; echo 2 >> a.txt; git stash pop 2>/dev/null; echo $?; git stash list`,
     ],
+    // rev-parse
+    [
+      "rev-parse of HEAD, --short, --show-toplevel, and --abbrev-ref",
+      `${COMMITTED}; git rev-parse HEAD; git rev-parse --short HEAD; git rev-parse --short=10 HEAD; git rev-parse --show-toplevel | sed "s|$PWD|DIR|"; git rev-parse --abbrev-ref HEAD; cd sub; git rev-parse --show-toplevel | sed "s|\${PWD%/sub}|DIR|"; git rev-parse nosuch 2>/dev/null; echo $?`,
+    ],
+    [
+      "rev-parse before the first commit",
+      "git init >/dev/null 2>&1; git rev-parse HEAD 2>/dev/null; echo $?; git rev-parse --abbrev-ref HEAD 2>/dev/null; echo $?",
+    ],
+    // branch, switch, checkout
+    [
+      "branch list, create, and delete",
+      `git init >/dev/null 2>&1; git branch; git branch early 2>/dev/null; echo $?; git add . && git commit -m first >/dev/null; git branch; git branch feature; git branch zeta HEAD; git branch; git branch feature 2>/dev/null; echo $?; git branch -d feature; git branch -d nosuch 2>/dev/null; echo $?; git branch -d master 2>/dev/null; echo $?; git branch`,
+    ],
+    [
+      "branch -d of a branch that is not merged, and -D",
+      `${COMMITTED}; git switch -c feature 2>/dev/null; echo f > f.txt; git add f.txt; git commit -m feature >/dev/null; git switch master 2>/dev/null; git branch -d feature 2>/dev/null; echo $?; git branch -D feature; git branch`,
+    ],
+    [
+      "switch between branches with a local change carried along",
+      `${COMMITTED}; git switch -c feature 2>/dev/null; echo f > f.txt; git add f.txt; git commit -m feature >/dev/null; git switch master 2>/dev/null; ls; echo local >> a.txt; git switch feature; ls; git status -s; git switch feature; git switch nosuch 2>/dev/null; echo $?; git branch`,
+    ],
+    [
+      "switch refused for a file with local changes and for an untracked file in the way",
+      `${COMMITTED}; git switch -c feature 2>/dev/null; echo changed >> a.txt; echo f > f.txt; git add .; git commit -m feature >/dev/null; git switch master 2>/dev/null; echo local >> a.txt; git switch feature 2>/dev/null; echo $?; git checkout -- a.txt; echo mine > f.txt; git switch feature 2>/dev/null; echo $?; git status -s; git branch`,
+    ],
+    [
+      "checkout of a branch, -b, a commit, and paths",
+      `${COMMITTED}; git checkout -b feature 2>/dev/null; echo f > f.txt; git add f.txt; git commit -m feature >/dev/null; git checkout master 2>/dev/null; git branch; git checkout -b other feature 2>/dev/null; git log --oneline; echo local >> a.txt; rm sub/y.txt; git checkout -- a.txt sub; git status -s; echo local >> a.txt; git checkout a.txt 2>/dev/null; git status -s; git checkout HEAD~1 2>/dev/null; git status; git branch; git rev-parse --abbrev-ref HEAD; git checkout nosuch 2>/dev/null; echo $?`,
+    ],
+    // restore
+    [
+      "restore of the working tree and of the index",
+      `${CHANGED}; git restore a.txt; git status -s; git restore sub; git status -s; git add -A; git restore --staged new.txt; git status -s; git restore --staged .; git status -s; git add a.txt 2>/dev/null; echo more >> sub/y.txt; git add -A; echo again >> sub/y.txt; git restore --staged --worktree sub/y.txt; git status -s; git restore nosuch 2>/dev/null; echo $?; git restore 2>/dev/null; echo $?`,
+    ],
+    // reset
+    [
+      "reset --soft, --mixed, and --hard",
+      `${CHANGED}; git add -A; git commit -m second >/dev/null; echo more >> a.txt; git reset --soft HEAD~1; git status -s; git log --oneline; git reset --mixed; git status -s; git reset --hard; git status -s; git reset --hard HEAD; ls sub sub/deep`,
+    ],
+    [
+      "reset to an earlier commit and reset of paths",
+      `${CHANGED}; git add -A; git commit -m second >/dev/null; echo three >> new.txt; git commit -am third >/dev/null; git reset HEAD~1; git log --oneline; git status -s; git add -A; git reset new.txt; git status -s; git reset -- a.txt; git reset HEAD~1 -- a.txt; git status -s; git reset --hard HEAD~1; git log --oneline; git status -s; git reset nosuch 2>/dev/null; echo $?`,
+    ],
+    // rm and mv
+    [
+      "rm of a file, of a directory, and --cached",
+      `${COMMITTED}; git rm sub/y.txt; git status -s; ls sub; git rm sub 2>/dev/null; echo $?; git rm -r sub; git status -s; ls; git rm --cached a.txt; git status -s; git rm nosuch 2>/dev/null; echo $?; git commit -m removed`,
+    ],
+    [
+      "rm refused for changed files, and -f",
+      `${COMMITTED}; echo local >> a.txt; git rm a.txt 2>/dev/null; echo $?; echo n > n.txt; git add n.txt; git rm n.txt 2>/dev/null; echo $?; git rm --cached n.txt; echo staged >> sub/y.txt; git add sub/y.txt; echo local >> sub/y.txt; git rm --cached sub/y.txt 2>/dev/null; echo $?; git rm -f a.txt sub/y.txt; git status -s; (cd sub; git rm deep/x.txt; git status -s)`,
+    ],
+    [
+      "mv of a file, into a directory, and of a directory",
+      `${COMMITTED}; git mv a.txt b.txt; git status -s; mkdir dir; git mv b.txt dir; git status -s; git mv sub moved; git status -s; ls moved moved/deep; git mv nosuch x 2>/dev/null; echo $?; git mv dir/b.txt moved/y.txt 2>/dev/null; echo $?; echo u > untracked.txt; git mv untracked.txt other.txt 2>/dev/null; echo $?; git commit -m moved`,
+    ],
+    // show
+    [
+      "show of a commit, with --stat, and of a root commit",
+      `${CHANGED}; git add -A; git commit -m second -m 'Body text.' >/dev/null; git show; git show --stat; git show HEAD~1 --stat; git show HEAD~1; git show HEAD~5 2>/dev/null; echo $?`,
+    ],
+    [
+      "show of <commit>:<path> for a file and for a directory",
+      `${CHANGED}; git add -A; git commit -m second >/dev/null; git show HEAD:a.txt; git show HEAD~1:a.txt; git show HEAD:sub; git show HEAD:; git show HEAD~1:sub/y.txt HEAD:new.txt; git show HEAD:nosuch 2>/dev/null; echo $?`,
+    ],
     // outside a repository
     [
       "status, log, and add outside a repository",

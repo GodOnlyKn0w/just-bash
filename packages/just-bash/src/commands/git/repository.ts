@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import {
   deleteRef,
   expandOid,
+  listBranches,
   type PromiseFsClient,
   readBlob,
   readCommit,
@@ -424,6 +425,21 @@ export class Repository {
     const text = (await this.readText("HEAD"))?.trim() ?? "";
     if (text.startsWith("ref: ")) await this.setRef(text.slice(5).trim(), oid);
     else await this.fs.writeFile(this.path("HEAD"), `${oid}\n`);
+  }
+
+  /** Makes HEAD name a branch, which may have no commit yet. */
+  async attachHead(branch: string): Promise<void> {
+    await this.fs.writeFile(this.path("HEAD"), `ref: refs/heads/${branch}\n`);
+  }
+
+  /** Makes HEAD a detached HEAD at oid. */
+  async detachHead(oid: string): Promise<void> {
+    await this.fs.writeFile(this.path("HEAD"), `${oid}\n`);
+  }
+
+  /** The names of the branches, loose and packed. */
+  branches(): Promise<string[]> {
+    return listBranches({ fs: this.client, gitdir: this.gitdir });
   }
 
   /**
